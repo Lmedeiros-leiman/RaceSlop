@@ -70,3 +70,40 @@ export const CIRCUIT_DEF: TrackDef = {
     { kind: 'arc', radius: 40, angle: Math.PI / 2 },
   ],
 };
+
+// Track 3 — off-road park. Narrow asphalt, grass shoulders (soft), gentle
+// 45° S-kinks (opposite-signed pair, net heading π per half) = ~678 m.
+// Start/finish mid-straight (0, 0) facing +z.
+export const PARK_DEF: TrackDef = {
+  id: 'park',
+  name: 'Off-road Park',
+  halfWidth: 4.5,
+  boundary: 'soft',
+  shoulder: 9,
+  theme: {
+    sky: 0x1c2b20,
+    asphalt: 0x4f5747,
+    edge: 0xffffff,
+    shoulder: 0x3a6b35,
+    ground: 0x2c4a28,
+    barrier: 0x8a6b3a,
+  },
+  path: [
+    { kind: 'straight', length: 100 },
+    { kind: 'arc', radius: 40, angle: Math.PI / 2 },
+    { kind: 'straight', length: 30 },
+    { kind: 'arc', radius: 18, angle: Math.PI / 4 },
+    { kind: 'straight', length: 25 },
+    { kind: 'arc', radius: 18, angle: -Math.PI / 4 },
+    { kind: 'straight', length: 30 },
+    { kind: 'arc', radius: 40, angle: Math.PI / 2 },
+    { kind: 'straight', length: 100 },
+    { kind: 'arc', radius: 40, angle: Math.PI / 2 },
+    { kind: 'straight', length: 30 },
+    { kind: 'arc', radius: 18, angle: Math.PI / 4 },
+    { kind: 'straight', length: 25 },
+    { kind: 'arc', radius: 18, angle: -Math.PI / 4 },
+    { kind: 'straight', length: 30 },
+    { kind: 'arc', radius: 40, angle: Math.PI / 2 },
+  ],
+};
