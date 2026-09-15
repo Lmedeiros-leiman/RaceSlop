@@ -1,7 +1,7 @@
 export function formatTime(sec: number): string {
-  const clamped = Math.max(0, sec);
-  const m = Math.floor(clamped / 60);
-  const s = clamped - m * 60;
+  const cs = Math.round(Math.max(0, sec) * 100);
+  const m = Math.floor(cs / 6000);
+  const s = (cs % 6000) / 100;
   return `${m}:${s.toFixed(2).padStart(5, '0')}`;
 }
 

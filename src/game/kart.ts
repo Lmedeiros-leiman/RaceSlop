@@ -36,18 +36,21 @@ export function stepKart(s: KartState, input: DriveInput, p: KartParams, dt: num
     const target = p.driftMaxAngle * Math.sign(input.steer);
     s.driftAngle += (target - s.driftAngle) * Math.min(1, 10 * dt);
   } else if (s.drifting) {
-    if (s.driftTime > 1.5) {
-      s.boostMult = p.boostFull;
-      s.boostTime = p.boostFullTime;
-    } else if (s.driftTime >= 0.5) {
-      s.boostMult = p.boostSmall;
-      s.boostTime = p.boostSmallTime;
+    if (canDrift) {
+      if (s.driftTime > 1.5) {
+        s.boostMult = p.boostFull;
+        s.boostTime = p.boostFullTime;
+      } else if (s.driftTime >= 0.5) {
+        s.boostMult = p.boostSmall;
+        s.boostTime = p.boostSmallTime;
+      }
     }
     cancelDrift(s);
   }
 
   const dir = s.speed >= 0 ? 1 : -1;
-  s.heading += input.steer * p.steerRate * dir * dt * (s.drifting ? 0.8 : 1);
+  const lowSpeedScale = Math.min(1, Math.abs(s.speed) / 4);
+  s.heading += input.steer * p.steerRate * dir * dt * (s.drifting ? 0.8 : 1) * lowSpeedScale;
 
   const moveDir = s.heading + s.driftAngle;
   s.pos.x += Math.sin(moveDir) * s.speed * dt;

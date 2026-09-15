@@ -35,6 +35,13 @@ describe('steering', () => {
     stepKart(s, { ...idle, steer: 1 }, DEFAULT_PARAMS, 1);
     expect(s.heading).toBeCloseTo(DEFAULT_PARAMS.steerRate, 6);
   });
+
+  it('parked kart does not yaw', () => {
+    const s = createKartState(0, 0, 0);
+    s.speed = 0;
+    stepKart(s, { ...idle, steer: 1 }, DEFAULT_PARAMS, 1);
+    expect(s.heading).toBe(0);
+  });
 });
 
 describe('drift and boost', () => {
@@ -74,5 +81,21 @@ describe('drift and boost', () => {
     s.speed = 5;
     stepKart(s, { throttle: true, brake: false, steer: 1, drift: true }, DEFAULT_PARAMS, 1 / 60);
     expect(s.drifting).toBe(false);
+  });
+
+  it('braking below drift speed mid-drift cancels with no boost', () => {
+    const s = createKartState(0, 0, 0);
+    s.speed = DEFAULT_PARAMS.topSpeed;
+    for (let i = 0; i < 100; i++) {
+      stepKart(s, { throttle: true, brake: false, steer: 1, drift: true }, DEFAULT_PARAMS, 1 / 60);
+    }
+    expect(s.drifting).toBe(true);
+    for (let i = 0; i < 300 && s.speed >= DEFAULT_PARAMS.topSpeed * 0.4; i++) {
+      stepKart(s, { throttle: false, brake: true, steer: 1, drift: true }, DEFAULT_PARAMS, 1 / 60);
+    }
+    expect(s.speed).toBeLessThan(DEFAULT_PARAMS.topSpeed * 0.4);
+    stepKart(s, { throttle: false, brake: true, steer: 1, drift: false }, DEFAULT_PARAMS, 1 / 60);
+    expect(s.drifting).toBe(false);
+    expect(s.boostTime).toBeLessThanOrEqual(0);
   });
 });

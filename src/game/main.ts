@@ -116,7 +116,9 @@ export function initGame(canvas: HTMLCanvasElement, hud: HTMLElement): void {
     // 5. Walls (single call per frame: the 0.7x bleed compounds per call).
     resolveBoundary(kart, track);
 
-    // 6. Off-track cap.
+    // 6. Off-track cap (safety net only: resolveBoundary above already
+    // clamps at the asphalt edge per SPEC-M1 §5, so this fires only if a
+    // position ever escapes the clamp, e.g. tunneling on a lag spike).
     if (isOffTrack(kart.pos, track) && kart.speed > DEFAULT_PARAMS.offTrackCap) {
       kart.speed = DEFAULT_PARAMS.offTrackCap;
     }
