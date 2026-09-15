@@ -170,8 +170,9 @@ export function isOffTrack(pos: Vec2, track: Track): boolean {
 
 export function resolveBoundary(s: KartState, track: Track): boolean {
   const near = nearestOnCenter(s.pos, track.samples);
-  if (near.dist <= track.halfWidth) return false;
-  const over = near.dist - track.halfWidth;
+  const limit = track.boundary === 'soft' ? track.halfWidth + track.shoulder : track.halfWidth;
+  if (near.dist <= limit) return false;
+  const over = near.dist - limit;
   const nx = (s.pos.x - near.x) / near.dist;
   const nz = (s.pos.z - near.z) / near.dist;
   s.pos.x -= nx * over;

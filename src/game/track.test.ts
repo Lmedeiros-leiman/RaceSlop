@@ -224,3 +224,38 @@ describe('validateTrackDef', () => {
     expect(validateTrackDef(def).some((e) => e.includes('checkpoints'))).toBe(true);
   });
 });
+
+const SOFT_DEF = {
+  ...OVAL_DEF,
+  id: 'soft-test',
+  halfWidth: 4.5,
+  boundary: 'soft' as const,
+  shoulder: 9,
+};
+
+describe('soft boundary policy', () => {
+  it('does not clamp inside the grass shoulder', () => {
+    const t = buildTrack(SOFT_DEF);
+    const s = createKartState(8, 0, 0);
+    s.speed = 20;
+    expect(resolveBoundary(s, t)).toBe(false);
+    expect(s.pos.x).toBe(8);
+  });
+
+  it('flags the shoulder as off-track (slowdown surface, exact band)', () => {
+    const t = buildTrack(SOFT_DEF);
+    expect(isOffTrack({ x: 5, z: 0 }, t)).toBe(true);
+    expect(isOffTrack({ x: 4, z: 0 }, t)).toBe(false);
+  });
+
+  it('clamps at the outer wall with drift cancel and bleed', () => {
+    const t = buildTrack(SOFT_DEF);
+    const s = createKartState(20, 0, 0);
+    s.speed = 20;
+    s.drifting = true;
+    expect(resolveBoundary(s, t)).toBe(true);
+    expect(s.drifting).toBe(false);
+    const near = nearestOnCenter(s.pos, t.samples);
+    expect(near.dist).toBeLessThanOrEqual(t.halfWidth + t.shoulder + 0.01);
+  });
+});
