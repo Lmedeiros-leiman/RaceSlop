@@ -17,7 +17,7 @@ export function initGame(canvas: HTMLCanvasElement, hud: HTMLElement): void {
   renderer.setSize(canvas.clientWidth || 960, canvas.clientHeight || 540, false);
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x111118);
+  scene.background = new THREE.Color(track.theme.sky);
 
   const camera = new THREE.PerspectiveCamera(60, 16 / 9, 0.1, 500);
 
@@ -96,11 +96,12 @@ export function initGame(canvas: HTMLCanvasElement, hud: HTMLElement): void {
     // 5. Walls (single call per frame: the 0.7x bleed compounds per call).
     resolveBoundary(kart, track);
 
-    // 6. Off-track cap (safety net only: resolveBoundary above already
-    // clamps at the asphalt edge per SPEC-M1 §5, so this fires only if a
-    // position ever escapes the clamp, e.g. tunneling on a lag spike).
-    if (isOffTrack(kart.pos, track) && kart.speed > DEFAULT_PARAMS.offTrackCap) {
-      kart.speed = DEFAULT_PARAMS.offTrackCap;
+    // 6. Off-track rules: hard cap on the slowdown surface; grass cancels
+    // drift charge / denies boost (no charging a boost off-track). For wall
+    // tracks this stays unreachable behind resolveBoundary's clamp.
+    if (isOffTrack(kart.pos, track)) {
+      if (kart.speed > DEFAULT_PARAMS.offTrackCap) kart.speed = DEFAULT_PARAMS.offTrackCap;
+      cancelDrift(kart);
     }
 
     // 7. Laps + kart mesh sync.
