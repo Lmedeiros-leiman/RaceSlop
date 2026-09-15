@@ -8,6 +8,7 @@ import { buildTrack, isOffTrack, LapTracker, resolveBoundary } from './track';
 import { OVAL_DEF } from './tracks';
 import { buildTrackMesh } from './trackMesh';
 import { createKartState, createRawInput, DEFAULT_PARAMS, toDriveInput } from './types';
+import { createBrowserRecordStore } from './records';
 
 // Full M1 game entry. Runs only in the browser (imported from a
 // client-side module script in GameCanvas.astro, never on the server).
@@ -27,6 +28,7 @@ export function initGame(canvas: HTMLCanvasElement, hud: HTMLElement): void {
   scene.add(new THREE.AmbientLight(0x8888ff, 0.5));
 
   const track = buildTrack(OVAL_DEF);
+  const store = createBrowserRecordStore();
   scene.add(buildTrackMesh(track));
 
   // Selected character until the M2 select flow lands (Plan 04).
@@ -35,6 +37,8 @@ export function initGame(canvas: HTMLCanvasElement, hud: HTMLElement): void {
 
   const kart = createKartState(track.start.pos.x, track.start.pos.z, track.start.heading);
   const tracker = new LapTracker(track.checkpoints);
+  const storedBest = store.getBest(track.id);
+  if (storedBest !== null) tracker.best = storedBest;
   tracker.reset(0);
 
   const raw = createRawInput();
@@ -105,7 +109,8 @@ export function initGame(canvas: HTMLCanvasElement, hud: HTMLElement): void {
     }
 
     // 7. Laps + kart mesh sync.
-    tracker.update(kart.pos, now);
+    const lap = tracker.update(kart.pos, now);
+    if (lap.lap !== null) store.recordLap(track.id, lap.lap);
     kartMesh.position.set(kart.pos.x, 0, kart.pos.z);
     kartMesh.rotation.y = kart.heading + kart.driftAngle;
 
