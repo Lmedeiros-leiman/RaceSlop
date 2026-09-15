@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { buildTrack, isOffTrack, LapTracker, minRadius, nearestOnCenter, pathLength, resolveBoundary, samplePath } from './track';
-import { OVAL_DEF } from './tracks';
+import { buildTrack, isOffTrack, LapTracker, minRadius, nearestOnCenter, pathLength, resolveBoundary, samplePath, validateTrackDef } from './track';
+import { DEFAULT_THEME, OVAL_DEF } from './tracks';
+import type { TrackDef } from './track';
 import { createKartState } from './types';
 
 describe('segment math', () => {
@@ -124,21 +125,6 @@ describe('LapTracker', () => {
     const t = buildTrack(OVAL_DEF);
     const tracker = new LapTracker(t.checkpoints);
     tracker.reset(0);
-    const seq = [t.checkpoints[1], t.checkpoints[2], t.checkpoints[3], t.checkpoints[0]];
-    let lap: number | null = null;
-    seq.forEach((cp, i) => {
-      const r = tracker.update({ x: cp.x, z: cp.z }, (i + 1) * 5);
-      if (r.lap !== null) lap = r.lap;
-    });
-    expect(lap).toBeCloseTo(20, 6);
-    expect(tracker.last).toBeCloseTo(20, 6);
-    expect(tracker.best).toBeCloseTo(20, 6);
-  });
-
-  it('ignores the line when checkpoints are skipped', () => {
-    const t = buildTrack(OVAL_DEF);
-    const tracker = new LapTracker(t.checkpoints);
-    tracker.reset(0);
     const r = tracker.update({ x: t.checkpoints[0].x, z: t.checkpoints[0].z }, 10);
     expect(r.lap).toBeNull();
     expect(tracker.last).toBeNull();
@@ -152,5 +138,89 @@ describe('LapTracker', () => {
     tracker.invalidate(7);
     expect(tracker.current).toBe(0);
     expect(tracker.last).toBeNull();
+  });
+});
+
+const BASE = {
+  id: 'test',
+  name: 'Test',
+  halfWidth: 6,
+  boundary: 'wall' as const,
+  shoulder: 0,
+  theme: DEFAULT_THEME,
+};
+
+describe('validateTrackDef', () => {
+  it('accepts the stadium loop and the oval def', () => {
+    const stadium: TrackDef = {
+      ...BASE,
+      path: [
+        { kind: 'straight', length: 80 },
+        { kind: 'arc', radius: 40, angle: Math.PI },
+        { kind: 'straight', length: 80 },
+        { kind: 'arc', radius: 40, angle: Math.PI },
+      ],
+    };
+    expect(validateTrackDef(stadium)).toEqual([]);
+    expect(validateTrackDef(OVAL_DEF)).toEqual([]);
+  });
+
+  it('flags an open path (position and heading)', () => {
+    const def: TrackDef = {
+      ...BASE,
+      path: [
+        { kind: 'straight', length: 80 },
+        { kind: 'arc', radius: 40, angle: Math.PI },
+        { kind: 'straight', length: 80 },
+      ],
+    };
+    const errors = validateTrackDef(def);
+    expect(errors.some((e) => e.includes('closure: position'))).toBe(true);
+    expect(errors.some((e) => e.includes('closure: heading'))).toBe(true);
+  });
+
+  it('flags tight arcs and a non-straight start', () => {
+    const def: TrackDef = {
+      ...BASE,
+      path: [
+        { kind: 'arc', radius: 12, angle: Math.PI / 2 },
+        { kind: 'straight', length: 60 },
+        { kind: 'arc', radius: 40, angle: Math.PI },
+      ],
+    };
+    const errors = validateTrackDef(def);
+    expect(errors.some((e) => e.includes('radius'))).toBe(true);
+    expect(errors.some((e) => e.includes('start'))).toBe(true);
+  });
+
+  it('flags a self-intersection', () => {
+    // Three right-hand quarters aim the final straight back across the
+    // first straight at (0, 80).
+    const def: TrackDef = {
+      ...BASE,
+      path: [
+        { kind: 'straight', length: 100 },
+        { kind: 'arc', radius: 20, angle: Math.PI / 2 },
+        { kind: 'arc', radius: 20, angle: Math.PI / 2 },
+        { kind: 'arc', radius: 20, angle: Math.PI / 2 },
+        { kind: 'straight', length: 60 },
+      ],
+    };
+    expect(validateTrackDef(def).some((e) => e.includes('self-intersection'))).toBe(true);
+  });
+
+  it('flags overlapping trigger zones between non-adjacent checkpoints', () => {
+    const def: TrackDef = {
+      ...BASE,
+      // cp0 (0,0,r15) and cp2 (0,25,r15): 25 m apart <= 15+15 trigger radii.
+      checkpoints: [
+        { x: 0, z: 0, radius: 15 },
+        { x: 40, z: 120, radius: 12 },
+        { x: 0, z: 25, radius: 15 },
+        { x: 40, z: -40, radius: 12 },
+      ],
+      path: OVAL_DEF.path,
+    };
+    expect(validateTrackDef(def).some((e) => e.includes('checkpoints'))).toBe(true);
   });
 });

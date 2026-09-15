@@ -223,3 +223,54 @@ export class LapTracker {
     return { lap: null };
   }
 }
+
+export function validateTrackDef(def: TrackDef): string[] {
+  const errors: string[] = [];
+  const { samples: walked, length } = sampleTrack(def);
+  const end = walked[walked.length - 1];
+
+  if (Math.hypot(end.x, end.z) >= 2) errors.push('closure: position gap >= 2 m');
+  const TAU = Math.PI * 2;
+  const wrapped = ((end.heading % TAU) + TAU) % TAU;
+  if (Math.min(wrapped, TAU - wrapped) > (5 * Math.PI) / 180) {
+    errors.push('closure: heading gap >= 5 deg');
+  }
+
+  for (const seg of def.path) {
+    if (seg.kind === 'arc' && seg.radius < 18) errors.push(`radius: arc r=${seg.radius} < 18 m`);
+  }
+  if (def.path[0]?.kind !== 'straight') errors.push('start: path must begin on a straight');
+
+  // Approx self-intersection: dense points, skip pairs that are cyclically
+  // adjacent (within `window` samples along the loop), require the ribbons
+  // (2 * halfWidth) plus margin to stay clear.
+  const pts: Vec2[] = walked.map((p) => ({ x: p.x, z: p.z }));
+  if (pts.length > 1 && Math.hypot(end.x, end.z) < 1) pts.pop();
+  const minClear = 2 * def.halfWidth + 2;
+  const window = Math.ceil((2 * def.halfWidth + 10) / SAMPLE_STEP);
+  outer: for (let i = 0; i < pts.length; i++) {
+    for (let j = i + 1; j < pts.length; j++) {
+      const cyclic = Math.min(j - i, i + pts.length - j);
+      if (cyclic <= window) continue;
+      if (Math.hypot(pts[i].x - pts[j].x, pts[i].z - pts[j].z) < minClear) {
+        errors.push(`self-intersection: samples ${i}/${j} closer than ${minClear} m`);
+        break outer;
+      }
+    }
+  }
+
+  // Non-adjacent checkpoints must not overlap trigger zones (no wrong-branch
+  // triggers on folded layouts).
+  const cps = def.checkpoints ?? deriveCheckpoints(def, walked, length);
+  for (let i = 0; i < cps.length; i++) {
+    for (let j = i + 2; j < cps.length; j++) {
+      if (i === 0 && j === cps.length - 1) continue; // cyclic neighbors
+      const d = Math.hypot(cps[i].x - cps[j].x, cps[i].z - cps[j].z);
+      if (d <= cps[i].radius + cps[j].radius) {
+        errors.push(`checkpoints ${i}/${j} trigger zones overlap`);
+      }
+    }
+  }
+
+  return errors;
+}
