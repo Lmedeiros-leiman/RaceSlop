@@ -58,22 +58,37 @@ interface TrackDef {
 
 Rules:
 
-- **Sampling:** the center-line is sampled at ≤ 2 m steps by exact
-  straight/arc integration (no spline, no approximation drift).
+- **Sampling:** the center-line is sampled by a shared `sampleTrack(def)`
+  helper at ≤ 2 m steps by exact straight/arc integration (no spline, no
+  approximation drift). It returns samples + cumulative length; checkpoint
+  spacing and lap-length checks measure from that length.
 - **Closure:** a def is valid only if the path returns to its start point
-  (< 2 m gap, enforced by tests). All four defs use point symmetry
+  (< 2 m gap) **and** its end heading returns to the start heading
+  (< ~5° gap), both enforced by tests. All four defs use point symmetry
   (identical half-lists, net heading π each) so closure is guaranteed.
+- **Validation:** a `validateTrackDef(def)` helper + unit tests enforce:
+  closure (position + heading), min corner radius ≥ 18 m on the center-line,
+  start/finish on a straight, no self-intersection (approx segment check),
+  and min distance between non-consecutive checkpoints (no wrong-branch
+  triggers on folded layouts like S-curves).
 - **Checkpoints:** auto-derived, 8 per track, evenly spaced by arc length,
   radius `halfWidth + 6`. Checkpoint 0 sits at the start/finish line.
+  Exception: `oval` keeps its M1 as-built radii (10/12) unchanged.
 - **Boundary policy:**
   - `wall` (M1 behavior): invisible wall at the asphalt edge — clamp
-    position, cancel drift charge, ×0.7 speed bleed.
-  - `soft`: no clamp on a `shoulder`-wide slowdown surface (grass) beyond the
-    asphalt; the speed cap (`offTrackCap`) applies there; an outer wall at
+    position, cancel drift charge, ×0.7 speed bleed per contact.
+  - `soft`: no clamp on a `shoulder`-wide slowdown surface (grass) in
+    `dist ∈ (halfWidth, halfWidth + shoulder]`; the speed cap (`offTrackCap`)
+    applies there as a hard clamp; grass cancels drift charge / denies boost
+    on release (no charging a boost off-track). An outer wall at
     `halfWidth + shoulder` clamps escapes with wall behavior.
-- **Theme:** the mesh builder and scene background read all colors from
-  `theme`. Readability bar for every theme: track edges pop against asphalt
-  and ground at race speed.
+  - The M1 `halfWidth + 2` tolerance in `isOffTrack` is removed; generic
+    tracks use the exact `halfWidth` / `halfWidth + shoulder` bands above.
+- **Theme:** `TrackTheme` is `{ sky, asphalt, edge, shoulder, ground, barrier }`
+  (all hex colors). The mesh builder and scene background read all colors
+  from `theme`. Readability bar for every theme: track edges pop against
+  asphalt and ground at race speed. The start stripe orients to the
+  start-tangent (not hardcoded +x).
 
 ## 5. The four tracks
 
@@ -90,7 +105,11 @@ it, T2/T3 land shorter. Final numbers are tuning, not redesign.
 
 Design constraints for all new tracks: min corner radius ≥ 18 m (readable at
 speed, cornerable without drift at ~20 m/s), 1–2 drift moments per lap,
-start/finish on a straight, no self-intersecting layouts.
+start/finish on a straight, no self-intersecting layouts. Min radius is
+measured on the center-line; the inner edge is tighter by `halfWidth`
+(e.g. park 18 m center → 13.5 m inner). The retained oval is expressed as
+an `OVAL_DEF` such that `buildTrack(OVAL_DEF)` matches M1 `buildOval`
+(length/checkpoints parity test).
 
 ## 6. Characters (roster of 4)
 
@@ -112,24 +131,37 @@ select screen. Names/palettes are data; rename freely.
 States: `character → track → race`.
 
 - **Character select:** ←/→ moves the cursor (wraps), Enter confirms.
+  Menu cursor uses edge-triggered keydown (key repeat must not spin the cursor).
 - **Track select:** ←/→ moves (wraps), Enter starts the race, Esc goes back
   to character select. Each track card shows its all-time best from records.
 - **Race:** M1 rules unchanged (Enter restarts timer, R resets to track).
-  Esc exits to track select.
-- Cursor resets to the first item on each screen entry. Last selection is
+  Esc exits to track select. Each race builds a fresh `LapTracker` for the
+  selected track with best seeded from records (never carried across tracks).
+- Cursor is remembered per screen within the session (returning via Esc keeps
+  your place); it resets to the first item only on boot. Last selection is
   not persisted across sessions (records store bests only).
-- Menus render as a DOM overlay over the canvas; the race loop is paused
-  while a menu is up. No mouse support in M2.
+- Menus render as a DOM overlay over the canvas; while a menu is up the loop
+  still renders but skips `stepKart` + `tracker.update` (own `now` clock stays
+  frozen; the `0.05` dt clamp absorbs the resume). Race entry/exit clears
+  drift/boost state and pending inputs. The Enter/Esc keydown that triggers a
+  transition is consumed in that frame and must not also fire a race action
+  (no double-fire). Steering/drift keys are ignored while a menu is up.
+  Keyboard-driven; mouse click on overlay cards is allowed as a free nicety,
+  not required for acceptance.
 
 ## 8. Records
 
 - Written on every valid lap: better-than-stored persists, worse does not.
+  Comparison uses rounded centisecond values (avoids write churn on invisible
+  differences).
 - Precision: centiseconds (round on write, `Math.round(sec * 100) / 100`).
 - HUD "best" shows the all-time best for the current track (seeded from
   storage at race start, updated live when beaten — M1 semantics).
 - Corruption policy: unparsable or wrong-version payload is discarded and
-  treated as empty. Storage unavailable (private mode) → in-memory fallback,
-  game never errors.
+  treated as empty. `localStorage` read *and* write are wrapped in try/catch
+  (private-mode read throws, quota-exceeded write throws) → in-memory fallback,
+  game never errors. The store takes an injectable storage adapter for unit tests.
+- Track ids are stable persistence keys and are never reused by future tracks.
 
 ## 9. Input (M2 additions)
 
@@ -140,7 +172,8 @@ States: `character → track → race`.
 | Cursor | ←/→ (+A/D) | menus |
 
 `restart` in `RawInput` is renamed `confirm` (same key, race keeps its M1
-behavior). Escape joins the prevent-default set.
+behavior; update all M1 call sites + tests). Escape joins the prevent-default
+set (`GAME_CODES`).
 
 ## 10. Module structure
 
@@ -148,25 +181,38 @@ New files (existing M1 modules keep their roles):
 
 - `src/game/tracks.ts` — the four `TrackDef` data entries
 - `src/game/characters.ts` — `CharacterDef[]` + `buildKartMesh(def)`
+  (shared cached geometries/materials per Vision §11 perf rule)
 - `src/game/records.ts` — pure record store + browser adapter
 - `src/game/flow.ts` — select-flow state machine + overlay rendering
+  (may split rendering into `overlay.ts` if it grows)
 
-Modified: `track.ts` (generic `buildTrack`, boundary policies),
-`trackMesh.ts` (theme-aware), `input.ts` (Escape, confirm rename),
-`main.ts` (flow wiring, per-race scene assembly), `GameCanvas.astro`
-(overlay element). `initGame(canvas, hud, overlay)` remains the only entry.
+Modified: `track.ts` (generic `buildTrack` + `sampleTrack` + `validateTrackDef`,
+boundary policies; `OVAL_DEF` parity with M1 `buildOval`), `trackMesh.ts`
+(theme-aware, tangent-oriented start stripe), `input.ts` (Escape, confirm rename),
+`main.ts` (flow wiring, per-race scene assembly with geometry disposal on track
+switch), `GameCanvas.astro` + `play.astro` (overlay element).
+`initGame(canvas, hud, overlay)` remains the only entry.
 
 ## 11. Acceptance (M2 done)
 
 - [ ] `/play` boots into character select; 4 characters visually distinct
 - [ ] Track select shows 4 tracks, each with its stored best or `--:--.--`
-- [ ] All 4 tracks drivable start-to-finish with correct lap counting
-- [ ] Park slows on grass shoulders; walls behave per policy on all tracks
+- [ ] All 4 tracks drivable start-to-finish with correct lap counting;
+      wrong-way laps never count on any track
+- [ ] All 4 defs pass `validateTrackDef` (closure position + heading,
+      8 checkpoints, lengths within §5 ranges)
+- [ ] Park slows on grass shoulders; walls behave per policy on all tracks;
+      grass cancels drift charge (no off-track boost charging)
 - [ ] Best lap per track survives reload; HUD best = all-time best
+- [ ] Records: corrupt/foreign payload discarded, quota/private-mode never
+      throws (unit-tested with fake storage)
 - [ ] Handling identical across all 4 characters
 - [ ] Esc flow works both directions; race rules unchanged from M1
+- [ ] Menu keys edge-triggered (no repeat spin); Enter/Esc transitions never
+      double-fire; R/Enter after a track switch act on the new track
 - [ ] `npm run build` green; no console errors in a 10-minute session; no
-      visible stutter on any track
+      visible stutter on any track; repeated track switching leaks no GPU
+      resources (disposal)
 
 ## 12. Open tuning (not decisions)
 
