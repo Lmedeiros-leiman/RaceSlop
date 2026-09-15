@@ -2,18 +2,25 @@
 // Client-only bridge. The game module only runs in the browser via
 // the module script below, never during Astro SSR / static prerender.
 ---
-<canvas
-  id="raceslop-canvas"
-  width="960"
-  height="540"
-  style="width: 100%; height: auto; display: block; background: #111;"
-></canvas>
+<div style="position: relative;">
+  <canvas
+    id="raceslop-canvas"
+    width="960"
+    height="540"
+    style="width: 100%; height: auto; display: block; background: #111;"
+  ></canvas>
+  <div
+    id="raceslop-hud"
+    style="position: absolute; top: 8px; left: 8px; color: #fff; font-family: monospace; font-size: 14px; text-shadow: 1px 1px 2px #000;"
+  ></div>
+</div>
 
 <script>
   import { initGame } from '../game/main.ts';
 
   const canvas = document.getElementById('raceslop-canvas');
-  if (canvas instanceof HTMLCanvasElement) {
-    initGame(canvas);
+  const hud = document.getElementById('raceslop-hud');
+  if (canvas instanceof HTMLCanvasElement && hud instanceof HTMLElement) {
+    initGame(canvas, hud);
   }
 </script>
