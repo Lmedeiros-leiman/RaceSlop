@@ -1,9 +1,11 @@
 import * as THREE from 'three';
 import { applyChaseCamera, computeChasePose } from './camera';
+import { buildKartMesh, CHARACTERS } from './characters';
 import { updateHud } from './hud';
 import { attachKeyboard, consumeActions } from './input';
 import { cancelDrift, stepKart } from './kart';
-import { buildOval, isOffTrack, LapTracker, resolveBoundary } from './track';
+import { buildTrack, isOffTrack, LapTracker, resolveBoundary } from './track';
+import { OVAL_DEF } from './tracks';
 import { buildTrackMesh } from './trackMesh';
 import { createKartState, createRawInput, DEFAULT_PARAMS, toDriveInput } from './types';
 
@@ -24,33 +26,11 @@ export function initGame(canvas: HTMLCanvasElement, hud: HTMLElement): void {
   scene.add(light);
   scene.add(new THREE.AmbientLight(0x8888ff, 0.5));
 
-  const track = buildOval();
+  const track = buildTrack(OVAL_DEF);
   scene.add(buildTrackMesh(track));
 
-  // Placeholder kart (SPEC-M1 §9): box body in driver red + 4 cylinder
-  // wheels, created once at boot. Front nose marker makes heading
-  // readable from the chase camera behind.
-  const kartMesh = new THREE.Group();
-  const body = new THREE.Mesh(
-    new THREE.BoxGeometry(1, 0.5, 2),
-    new THREE.MeshStandardMaterial({ color: 0xff3355, flatShading: true }),
-  );
-  body.position.y = 0.45;
-  kartMesh.add(body);
-  const nose = new THREE.Mesh(
-    new THREE.BoxGeometry(0.6, 0.2, 0.4),
-    new THREE.MeshStandardMaterial({ color: 0xffcc33, flatShading: true }),
-  );
-  nose.position.set(0, 0.4, 1.1);
-  kartMesh.add(nose);
-  const wheelGeo = new THREE.CylinderGeometry(0.22, 0.22, 0.25, 12);
-  const wheelMat = new THREE.MeshStandardMaterial({ color: 0x181818, flatShading: true });
-  for (const [wx, wz] of [[-0.6, 0.7], [0.6, 0.7], [-0.6, -0.7], [0.6, -0.7]] as const) {
-    const wheel = new THREE.Mesh(wheelGeo, wheelMat);
-    wheel.rotation.z = Math.PI / 2;
-    wheel.position.set(wx, 0.22, wz);
-    kartMesh.add(wheel);
-  }
+  // Selected character until the M2 select flow lands (Plan 04).
+  const kartMesh = buildKartMesh(CHARACTERS[0]);
   scene.add(kartMesh);
 
   const kart = createKartState(track.start.pos.x, track.start.pos.z, track.start.heading);

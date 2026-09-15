@@ -1,9 +1,9 @@
 import * as THREE from 'three';
-import type { OvalTrack } from './track';
+import type { Track } from './track';
 
 // Placeholder ribbon mesh over the oval center-line samples.
 // 5 materials: asphalt, edge lines, start stripe, ground, barriers.
-export function buildTrackMesh(track: OvalTrack): THREE.Group {
+export function buildTrackMesh(track: Track): THREE.Group {
   const group = new THREE.Group();
   const n = track.samples.length;
   const hw = track.halfWidth;

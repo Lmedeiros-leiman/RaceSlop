@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { buildOval, isOffTrack, LapTracker, nearestOnCenter, pathLength, resolveBoundary, samplePath } from './track';
+import { buildTrack, isOffTrack, LapTracker, minRadius, nearestOnCenter, pathLength, resolveBoundary, samplePath } from './track';
+import { OVAL_DEF } from './tracks';
 import { createKartState } from './types';
 
 describe('segment math', () => {
@@ -45,9 +46,9 @@ describe('segment math', () => {
   });
 });
 
-describe('oval', () => {
-  it('has a lap length in spec range', () => {
-    const t = buildOval();
+describe('buildTrack (oval def, M1 parity)', () => {
+  it('keeps the M1 spec range and width', () => {
+    const t = buildTrack(OVAL_DEF);
     let len = 0;
     for (let i = 0; i < t.samples.length; i++) {
       const a = t.samples[i];
@@ -57,18 +58,39 @@ describe('oval', () => {
     expect(len).toBeGreaterThan(350);
     expect(len).toBeLessThan(450);
     expect(t.halfWidth).toBe(6);
-    expect(t.checkpoints.length).toBeGreaterThanOrEqual(4);
   });
 
-  it('detects off-track beyond asphalt plus margin', () => {
-    const t = buildOval();
+  it('keeps the M1 as-built checkpoints with radii 10/12', () => {
+    const t = buildTrack(OVAL_DEF);
+    expect(t.checkpoints).toHaveLength(4);
+    expect(t.checkpoints.map((c) => c.radius)).toEqual([10, 12, 10, 12]);
+    const [c0, c1, , c3] = t.checkpoints;
+    expect(c0.x).toBeCloseTo(0, 3);
+    expect(c0.z).toBeCloseTo(0, 3);
+    expect(c1.x).toBeCloseTo(40, 3);
+    expect(c1.z).toBeCloseTo(120, 3);
+    expect(c3.x).toBeCloseTo(40, 3);
+    expect(c3.z).toBeCloseTo(-40, 3);
+  });
+
+  it('auto-derives 8 checkpoints when no override is given', () => {
+    const def = { ...OVAL_DEF, checkpoints: undefined };
+    const t = buildTrack(def);
+    expect(t.checkpoints).toHaveLength(8);
+    expect(t.checkpoints.every((c) => c.radius === 12)).toBe(true);
+    expect(Math.hypot(t.checkpoints[0].x - t.start.pos.x, t.checkpoints[0].z - t.start.pos.z)).toBeLessThan(2);
+  });
+
+  it('detects off-track at the exact asphalt band (no +2 tolerance)', () => {
+    const t = buildTrack(OVAL_DEF);
     expect(isOffTrack(t.start.pos, t)).toBe(false);
-    expect(isOffTrack({ x: t.start.pos.x, z: t.start.pos.z + 30 }, t)).toBe(true);
+    expect(isOffTrack({ x: 6.5, z: 3 }, t)).toBe(true);
+    expect(isOffTrack({ x: 30, z: 0 }, t)).toBe(true);
   });
 
-  it('clamps wall hits and cancels drift', () => {
-    const t = buildOval();
-    const s = createKartState(t.start.pos.x, t.start.pos.z + 30, 0);
+  it('keeps wall behavior identical to M1', () => {
+    const t = buildTrack(OVAL_DEF);
+    const s = createKartState(30, 0, 0);
     s.speed = 20;
     s.drifting = true;
     expect(resolveBoundary(s, t)).toBe(true);
@@ -76,11 +98,15 @@ describe('oval', () => {
     const near = nearestOnCenter(s.pos, t.samples);
     expect(near.dist).toBeLessThanOrEqual(t.halfWidth + 0.01);
   });
+
+  it('reports the smallest arc radius', () => {
+    expect(minRadius(OVAL_DEF.path)).toBe(40);
+  });
 });
 
 describe('LapTracker', () => {
   it('counts a lap after all checkpoints in order', () => {
-    const t = buildOval();
+    const t = buildTrack(OVAL_DEF);
     const tracker = new LapTracker(t.checkpoints);
     tracker.reset(0);
     const seq = [t.checkpoints[1], t.checkpoints[2], t.checkpoints[3], t.checkpoints[0]];
@@ -95,7 +121,22 @@ describe('LapTracker', () => {
   });
 
   it('ignores the line when checkpoints are skipped', () => {
-    const t = buildOval();
+    const t = buildTrack(OVAL_DEF);
+    const tracker = new LapTracker(t.checkpoints);
+    tracker.reset(0);
+    const seq = [t.checkpoints[1], t.checkpoints[2], t.checkpoints[3], t.checkpoints[0]];
+    let lap: number | null = null;
+    seq.forEach((cp, i) => {
+      const r = tracker.update({ x: cp.x, z: cp.z }, (i + 1) * 5);
+      if (r.lap !== null) lap = r.lap;
+    });
+    expect(lap).toBeCloseTo(20, 6);
+    expect(tracker.last).toBeCloseTo(20, 6);
+    expect(tracker.best).toBeCloseTo(20, 6);
+  });
+
+  it('ignores the line when checkpoints are skipped', () => {
+    const t = buildTrack(OVAL_DEF);
     const tracker = new LapTracker(t.checkpoints);
     tracker.reset(0);
     const r = tracker.update({ x: t.checkpoints[0].x, z: t.checkpoints[0].z }, 10);
@@ -104,7 +145,7 @@ describe('LapTracker', () => {
   });
 
   it('invalidate restarts the current lap without recording', () => {
-    const t = buildOval();
+    const t = buildTrack(OVAL_DEF);
     const tracker = new LapTracker(t.checkpoints);
     tracker.reset(0);
     tracker.update({ x: t.checkpoints[1].x, z: t.checkpoints[1].z }, 5);

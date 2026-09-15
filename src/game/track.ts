@@ -65,51 +65,90 @@ export interface Checkpoint {
   radius: number;
 }
 
-export interface OvalTrack {
-  samples: Vec2[];
-  halfWidth: number;
-  checkpoints: Checkpoint[];
-  start: { pos: Vec2; heading: number };
+export interface TrackTheme {
+  sky: number;
+  asphalt: number;
+  edge: number;
+  shoulder: number;
+  ground: number;
+  barrier: number;
 }
 
-const HALF_STRAIGHT = 40;
-const RADIUS = 40;
+export interface TrackDef {
+  id: string;
+  name: string;
+  halfWidth: number;
+  boundary: 'wall' | 'soft';
+  shoulder: number;
+  theme: TrackTheme;
+  path: Segment[];
+  checkpoints?: Checkpoint[];
+}
 
-export function buildOval(): OvalTrack {
-  const straightLen = 2 * HALF_STRAIGHT;
-  const total = 2 * straightLen + 2 * Math.PI * RADIUS;
-  const n = 256;
-  const samples: Vec2[] = [];
-  for (let i = 0; i < n; i++) {
-    const d0 = (i / n) * total;
-    let p: Vec2;
-    if (d0 < straightLen) {
-      p = { x: -HALF_STRAIGHT + d0, z: -RADIUS };
-    } else if (d0 - straightLen < Math.PI * RADIUS) {
-      const a = -Math.PI / 2 + (d0 - straightLen) / RADIUS;
-      p = { x: HALF_STRAIGHT + Math.cos(a) * RADIUS, z: Math.sin(a) * RADIUS };
-    } else if (d0 - straightLen - Math.PI * RADIUS < straightLen) {
-      const d = d0 - straightLen - Math.PI * RADIUS;
-      p = { x: HALF_STRAIGHT - d, z: RADIUS };
-    } else {
-      const d = d0 - straightLen - Math.PI * RADIUS - straightLen;
-      const a = Math.PI / 2 + d / RADIUS;
-      p = { x: -HALF_STRAIGHT + Math.cos(a) * RADIUS, z: Math.sin(a) * RADIUS };
+export interface Track {
+  id: string;
+  samples: Vec2[];
+  halfWidth: number;
+  shoulder: number;
+  boundary: 'wall' | 'soft';
+  checkpoints: Checkpoint[];
+  start: { pos: Vec2; heading: number };
+  theme: TrackTheme;
+}
+
+export interface TrackWalk {
+  samples: PathSample[];
+  length: number;
+}
+
+export const CHECKPOINT_COUNT = 8;
+
+export function sampleTrack(def: TrackDef): TrackWalk {
+  return { samples: samplePath(def.path), length: pathLength(def.path) };
+}
+
+export function deriveCheckpoints(def: TrackDef, walked: PathSample[], length: number): Checkpoint[] {
+  const checkpoints: Checkpoint[] = [];
+  for (let k = 0; k < CHECKPOINT_COUNT; k++) {
+    const sk = (k / CHECKPOINT_COUNT) * length;
+    let idx = 0;
+    let bestErr = Number.POSITIVE_INFINITY;
+    for (let i = 0; i < walked.length; i++) {
+      const err = Math.abs(walked[i].s - sk);
+      if (err < bestErr) {
+        bestErr = err;
+        idx = i;
+      }
     }
-    samples.push(p);
+    checkpoints.push({ x: walked[idx].x, z: walked[idx].z, radius: def.halfWidth + 6 });
   }
-  const checkpoints: Checkpoint[] = [
-    { x: 0, z: -RADIUS, radius: 10 },
-    { x: HALF_STRAIGHT + RADIUS, z: 0, radius: 12 },
-    { x: 0, z: RADIUS, radius: 10 },
-    { x: -HALF_STRAIGHT - RADIUS, z: 0, radius: 12 },
-  ];
+  return checkpoints;
+}
+
+export function buildTrack(def: TrackDef): Track {
+  const { samples: walked, length } = sampleTrack(def);
+  const samples: Vec2[] = walked.map((p) => ({ x: p.x, z: p.z }));
+  // Closed loop: the walker ends on the start; drop the coincident sample.
+  const end = walked[walked.length - 1];
+  if (samples.length > 1 && Math.hypot(end.x, end.z) < 1) samples.pop();
   return {
+    id: def.id,
     samples,
-    halfWidth: 6,
-    checkpoints,
-    start: { pos: { x: 0, z: -RADIUS }, heading: Math.PI / 2 },
+    halfWidth: def.halfWidth,
+    shoulder: def.shoulder,
+    boundary: def.boundary,
+    checkpoints: def.checkpoints ?? deriveCheckpoints(def, walked, length),
+    start: { pos: { x: walked[0].x, z: walked[0].z }, heading: walked[0].heading },
+    theme: def.theme,
   };
+}
+
+export function minRadius(path: Segment[]): number {
+  let min = Number.POSITIVE_INFINITY;
+  for (const seg of path) {
+    if (seg.kind === 'arc' && seg.radius < min) min = seg.radius;
+  }
+  return min;
 }
 
 export function nearestOnCenter(pos: Vec2, samples: Vec2[]): { dist: number; x: number; z: number } {
@@ -125,11 +164,11 @@ export function nearestOnCenter(pos: Vec2, samples: Vec2[]): { dist: number; x: 
   return { dist: bestD, x: samples[best].x, z: samples[best].z };
 }
 
-export function isOffTrack(pos: Vec2, track: OvalTrack): boolean {
-  return nearestOnCenter(pos, track.samples).dist > track.halfWidth + 2;
+export function isOffTrack(pos: Vec2, track: Track): boolean {
+  return nearestOnCenter(pos, track.samples).dist > track.halfWidth;
 }
 
-export function resolveBoundary(s: KartState, track: OvalTrack): boolean {
+export function resolveBoundary(s: KartState, track: Track): boolean {
   const near = nearestOnCenter(s.pos, track.samples);
   if (near.dist <= track.halfWidth) return false;
   const over = near.dist - track.halfWidth;
