@@ -54,3 +54,26 @@ export function createRecordStore(load: () => string | null, save: (v: string) =
     },
   };
 }
+
+export const STORAGE_KEY = 'raceslop.records.v1';
+
+export function createBrowserRecordStore(): RecordStore {
+  // Memory mirror: keeps the session coherent when reads or writes throw.
+  let mem: string | null = null;
+  const read = (): string | null => {
+    try {
+      return window.localStorage.getItem(STORAGE_KEY);
+    } catch {
+      return mem;
+    }
+  };
+  const write = (v: string): void => {
+    mem = v;
+    try {
+      window.localStorage.setItem(STORAGE_KEY, v);
+    } catch {
+      // quota exceeded / disabled storage: memory mirror stays authoritative
+    }
+  };
+  return createRecordStore(read, write);
+}

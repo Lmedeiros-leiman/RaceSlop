@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createRecordStore } from './records';
+import { createBrowserRecordStore, createRecordStore, STORAGE_KEY } from './records';
 
 describe('RecordStore', () => {
   it('returns null when nothing is stored', () => {
@@ -76,5 +76,23 @@ describe('RecordStore', () => {
     expect(store.getBest('circuit')).toBeNull();
     expect(store.recordLap('circuit', 40)).toBe(true);
     expect(store.getBest('oval')).toBe(30);
+  });
+});
+
+describe('browser adapter', () => {
+  it('uses the spec storage key', () => {
+    expect(STORAGE_KEY).toBe('raceslop.records.v1');
+  });
+
+  it('round-trips through a storage-like fake', () => {
+    const mem = new Map<string, string>();
+    const store = createRecordStore(() => mem.get(STORAGE_KEY) ?? null, (v) => mem.set(STORAGE_KEY, v));
+    expect(store.recordLap('oval', 20)).toBe(true);
+    const reloaded = createRecordStore(() => mem.get(STORAGE_KEY) ?? null, (v) => mem.set(STORAGE_KEY, v));
+    expect(reloaded.getBest('oval')).toBe(20);
+  });
+
+  it('exposes createBrowserRecordStore for the browser only', () => {
+    expect(typeof createBrowserRecordStore).toBe('function');
   });
 });
