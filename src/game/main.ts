@@ -91,7 +91,7 @@ export function initGame(canvas: HTMLCanvasElement, hud: HTMLElement): void {
     const actions = consumeActions(raw);
 
     // 3. Reset / restart.
-    if (actions.restart) tracker.reset(now);
+    if (actions.confirm) tracker.reset(now);
     if (actions.reset) respawn(now);
 
     // 4. Physics.

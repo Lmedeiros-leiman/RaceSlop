@@ -33,7 +33,22 @@ describe('consumeActions', () => {
   it('returns and clears edge flags', () => {
     const s = createRawInput();
     setKey(s, 'KeyR', true);
-    expect(consumeActions(s)).toEqual({ reset: true, restart: false });
-    expect(consumeActions(s)).toEqual({ reset: false, restart: false });
+    expect(consumeActions(s)).toEqual({ reset: true, confirm: false, escape: false });
+    expect(consumeActions(s)).toEqual({ reset: false, confirm: false, escape: false });
+  });
+
+  it('captures Enter as confirm and Escape as escape', () => {
+    const s = createRawInput();
+    setKey(s, 'Enter', true);
+    setKey(s, 'Escape', true);
+    expect(consumeActions(s)).toEqual({ reset: false, confirm: true, escape: true });
+  });
+
+  it('ignores key repeat for edge actions (no cursor spin, no double-fire)', () => {
+    const s = createRawInput();
+    setKey(s, 'Enter', true, true);
+    setKey(s, 'Escape', true, true);
+    setKey(s, 'KeyR', true, true);
+    expect(consumeActions(s)).toEqual({ reset: false, confirm: false, escape: false });
   });
 });
