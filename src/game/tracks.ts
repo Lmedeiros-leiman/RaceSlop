@@ -107,3 +107,44 @@ export const PARK_DEF: TrackDef = {
     { kind: 'arc', radius: 40, angle: Math.PI / 2 },
   ],
 };
+
+// Track 4 — neon night. Wide flowing sweepers on a dark theme; readability
+// test per SPEC-M2 §5. Point-symmetric halves, net heading π each =
+// ~1161 m (~55 s laps). Start/finish mid-straight (0, 0) facing +z on a
+// 340 m straight. (S-kink pair: opposite-signed π/4 arcs, same as park —
+// literal same-sign pair would sum 3π/2 per half and break closure.)
+export const NEON_DEF: TrackDef = {
+  id: 'neon',
+  name: 'Neon Night',
+  halfWidth: 7,
+  boundary: 'wall',
+  shoulder: 0,
+  theme: {
+    sky: 0x0a0a14,
+    asphalt: 0x1c1c26,
+    edge: 0x22e6ff,
+    shoulder: 0x14141f,
+    ground: 0x12101c,
+    barrier: 0xff2bd6,
+  },
+  path: [
+    { kind: 'straight', length: 170 },
+    { kind: 'arc', radius: 70, angle: Math.PI / 2 },
+    { kind: 'straight', length: 40 },
+    { kind: 'arc', radius: 45, angle: Math.PI / 4 },
+    { kind: 'straight', length: 40 },
+    { kind: 'arc', radius: 45, angle: -Math.PI / 4 },
+    { kind: 'straight', length: 40 },
+    { kind: 'arc', radius: 70, angle: Math.PI / 2 },
+    { kind: 'straight', length: 170 },
+    { kind: 'arc', radius: 70, angle: Math.PI / 2 },
+    { kind: 'straight', length: 40 },
+    { kind: 'arc', radius: 45, angle: Math.PI / 4 },
+    { kind: 'straight', length: 40 },
+    { kind: 'arc', radius: 45, angle: -Math.PI / 4 },
+    { kind: 'straight', length: 40 },
+    { kind: 'arc', radius: 70, angle: Math.PI / 2 },
+  ],
+};
+
+export const TRACKS: readonly TrackDef[] = [OVAL_DEF, CIRCUIT_DEF, PARK_DEF, NEON_DEF];

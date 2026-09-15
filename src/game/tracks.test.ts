@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildTrack, isOffTrack, resolveBoundary, sampleTrack, validateTrackDef } from './track';
-import { CIRCUIT_DEF, PARK_DEF } from './tracks';
+import { CIRCUIT_DEF, NEON_DEF, OVAL_DEF, PARK_DEF, TRACKS } from './tracks';
 import { createKartState } from './types';
 
 describe('circuit def', () => {
@@ -60,5 +60,52 @@ describe('park def', () => {
     const s = createKartState(8, 50, 0);
     expect(resolveBoundary(s, t)).toBe(false);
     expect(s.pos.x).toBe(8);
+  });
+});
+
+describe('neon def', () => {
+  it('matches the SPEC-M2 §5 targets', () => {
+    expect(NEON_DEF.id).toBe('neon');
+    expect(NEON_DEF.halfWidth).toBe(7);
+    expect(NEON_DEF.boundary).toBe('wall');
+    const len = sampleTrack(NEON_DEF).length;
+    expect(len).toBeGreaterThan(1000);
+    expect(len).toBeLessThan(1250);
+  });
+
+  it('passes validateTrackDef', () => {
+    expect(validateTrackDef(NEON_DEF)).toEqual([]);
+  });
+
+  it('starts on a straight, closes, and derives 8 checkpoints', () => {
+    expect(NEON_DEF.path[0].kind).toBe('straight');
+    const t = buildTrack(NEON_DEF);
+    expect(t.samples.length).toBeGreaterThan(200);
+    expect(t.checkpoints).toHaveLength(8);
+    const tail = t.samples[t.samples.length - 1];
+    expect(Math.hypot(tail.x, tail.z)).toBeLessThan(4);
+    expect(t.start.heading).toBe(0);
+  });
+
+  it('keeps edges readable against the dark asphalt', () => {
+    expect(NEON_DEF.theme.asphalt).not.toBe(NEON_DEF.theme.edge);
+    expect(NEON_DEF.theme.edge).not.toBe(NEON_DEF.theme.sky);
+  });
+});
+
+describe('TRACKS', () => {
+  it('lists all four tracks with unique, stable ids', () => {
+    expect(TRACKS.map((t) => t.id)).toEqual(['oval', 'circuit', 'park', 'neon']);
+    expect(new Set(TRACKS.map((t) => t.id)).size).toBe(4);
+  });
+
+  it('includes the oval as-built', () => {
+    expect(TRACKS[0]).toBe(OVAL_DEF);
+  });
+
+  it('every def validates', () => {
+    for (const def of TRACKS) {
+      expect(validateTrackDef(def)).toEqual([]);
+    }
   });
 });
