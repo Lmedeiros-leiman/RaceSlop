@@ -33,3 +33,40 @@ export const OVAL_DEF: TrackDef = {
     { kind: 'arc', radius: 40, angle: Math.PI },
   ],
 };
+
+// Track 2 — technical circuit. Point-symmetric halves: S-chicane (r30/r20)
+// into a sweeper, net heading π per half. 2 x (170 m straight + chicane +
+// 60 m straight + r40) = ~717 m. Start/finish mid-straight (0, 0) facing +z.
+export const CIRCUIT_DEF: TrackDef = {
+  id: 'circuit',
+  name: 'Technical Circuit',
+  halfWidth: 6,
+  boundary: 'wall',
+  shoulder: 0,
+  theme: {
+    sky: 0x14181e,
+    asphalt: 0x43474f,
+    edge: 0xffd23f,
+    shoulder: 0x2a4a2e,
+    ground: 0x2b3a2b,
+    barrier: 0xd9483b,
+  },
+  path: [
+    { kind: 'straight', length: 70 },
+    { kind: 'arc', radius: 30, angle: Math.PI / 2 },
+    { kind: 'straight', length: 20 },
+    { kind: 'arc', radius: 20, angle: -Math.PI / 2 },
+    { kind: 'straight', length: 20 },
+    { kind: 'arc', radius: 30, angle: Math.PI / 2 },
+    { kind: 'straight', length: 60 },
+    { kind: 'arc', radius: 40, angle: Math.PI / 2 },
+    { kind: 'straight', length: 70 },
+    { kind: 'arc', radius: 30, angle: Math.PI / 2 },
+    { kind: 'straight', length: 20 },
+    { kind: 'arc', radius: 20, angle: -Math.PI / 2 },
+    { kind: 'straight', length: 20 },
+    { kind: 'arc', radius: 30, angle: Math.PI / 2 },
+    { kind: 'straight', length: 60 },
+    { kind: 'arc', radius: 40, angle: Math.PI / 2 },
+  ],
+};
