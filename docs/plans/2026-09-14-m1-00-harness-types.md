@@ -44,7 +44,7 @@ export default defineConfig({
 });
 ```
 
-In `package.json`, add devDependency `"vitest": "^3"` and script `"test": "vitest run"`. Run `npm install --no-audit --no-fund`.
+In `package.json`, add devDependency `"vitest": "^3"` and script `"test": "vitest run --passWithNoTests"` (bare `vitest run` exits 1 on vitest v3 with zero test files; the flag is a no-op once tests exist). Run `npm install --no-audit --no-fund`.
 
 - [ ] **Step 2: Verify the runner works with zero tests**
 
