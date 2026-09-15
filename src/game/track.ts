@@ -1,3 +1,61 @@
+export type Segment =
+  | { kind: 'straight'; length: number }
+  | { kind: 'arc'; radius: number; angle: number };
+
+export interface PathSample {
+  x: number;
+  z: number;
+  heading: number;
+  s: number;
+}
+
+export const SAMPLE_STEP = 1.5;
+
+export function pathLength(path: Segment[]): number {
+  let len = 0;
+  for (const seg of path) {
+    len += seg.kind === 'straight' ? seg.length : seg.radius * Math.abs(seg.angle);
+  }
+  return len;
+}
+
+// Exact integration: each sub-arc of turn dth and length ds advances by
+// (ds/dth) * (M(dth) - I) * f(heading), where M(dth) rotates the heading
+// vector forward (M(th) * (sin h, cos h) = (sin(h+th), cos(h+th))); each
+// straight sub-step advances along f(heading). Composition is exact, so
+// closed paths close to float precision.
+export function samplePath(path: Segment[], maxStep = SAMPLE_STEP): PathSample[] {
+  const out: PathSample[] = [{ x: 0, z: 0, heading: 0, s: 0 }];
+  let x = 0;
+  let z = 0;
+  let h = 0;
+  let s = 0;
+  for (const seg of path) {
+    const segLen = seg.kind === 'straight' ? seg.length : seg.radius * Math.abs(seg.angle);
+    const n = Math.max(1, Math.ceil(segLen / maxStep));
+    const ds = segLen / n;
+    for (let i = 0; i < n; i++) {
+      if (seg.kind === 'straight') {
+        x += Math.sin(h) * ds;
+        z += Math.cos(h) * ds;
+      } else {
+        const dth = seg.angle / n;
+        const k = ds / dth;
+        const c = Math.cos(dth);
+        const sn = Math.sin(dth);
+        const fx = Math.sin(h);
+        const fz = Math.cos(h);
+        x += k * (fx * sn + fz * (1 - c));
+        z += k * (fz * sn - fx * (1 - c));
+        h += dth;
+      }
+      s += ds;
+      out.push({ x, z, heading: h, s });
+    }
+  }
+  return out;
+}
+
 import { cancelDrift } from './kart';
 import type { KartState, Vec2 } from './types';
 

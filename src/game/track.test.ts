@@ -1,6 +1,49 @@
 import { describe, expect, it } from 'vitest';
-import { buildOval, isOffTrack, LapTracker, nearestOnCenter, resolveBoundary } from './track';
+import { buildOval, isOffTrack, LapTracker, nearestOnCenter, pathLength, resolveBoundary, samplePath } from './track';
 import { createKartState } from './types';
+
+describe('segment math', () => {
+  it('computes path length for straights and arcs', () => {
+    const p = [
+      { kind: 'straight', length: 80 },
+      { kind: 'arc', radius: 40, angle: Math.PI },
+    ];
+    expect(pathLength(p)).toBeCloseTo(80 + 40 * Math.PI, 6);
+  });
+
+  it('samples a straight with uniform sub-steps', () => {
+    const s = samplePath([{ kind: 'straight', length: 9 }], 1.5);
+    expect(s[0]).toEqual({ x: 0, z: 0, heading: 0, s: 0 });
+    expect(s[1].x).toBeCloseTo(0, 6);
+    expect(s[1].z).toBeCloseTo(1.5, 6);
+    expect(s[s.length - 1].z).toBeCloseTo(9, 6);
+    expect(s[s.length - 1].heading).toBe(0);
+  });
+
+  it('integrates a quarter arc exactly', () => {
+    const s = samplePath([{ kind: 'arc', radius: 10, angle: Math.PI / 2 }], 1.5);
+    const end = s[s.length - 1];
+    expect(end.x).toBeCloseTo(10, 3);
+    expect(end.z).toBeCloseTo(10, 3);
+    expect(end.heading).toBeCloseTo(Math.PI / 2, 6);
+  });
+
+  it('walks a stadium loop back to the start, heading included', () => {
+    const stadium = [
+      { kind: 'straight', length: 80 },
+      { kind: 'arc', radius: 40, angle: Math.PI },
+      { kind: 'straight', length: 80 },
+      { kind: 'arc', radius: 40, angle: Math.PI },
+    ];
+    const s = samplePath(stadium, 1.5);
+    const end = s[s.length - 1];
+    expect(Math.hypot(end.x, end.z)).toBeLessThan(0.5);
+    const TAU = Math.PI * 2;
+    const wrapped = ((end.heading % TAU) + TAU) % TAU;
+    expect(Math.min(wrapped, TAU - wrapped)).toBeLessThan(0.01);
+    expect(end.s).toBeCloseTo(pathLength(stadium), 3);
+  });
+});
 
 describe('oval', () => {
   it('has a lap length in spec range', () => {
