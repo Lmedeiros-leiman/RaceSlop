@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildTrack, isOffTrack, resolveBoundary, sampleTrack, validateTrackDef } from './track';
-import { CIRCUIT_DEF, NEON_DEF, OVAL_DEF, PARK_DEF, TRACKS } from './tracks';
+import { CIRCUIT_DEF, FOREST_DEF, NEON_DEF, OVAL_DEF, PARK_DEF, TRACKS } from './tracks';
 import { createKartState } from './types';
 
 describe('circuit def', () => {
@@ -37,6 +37,11 @@ describe('park def', () => {
     const len = sampleTrack(PARK_DEF).length;
     expect(len).toBeGreaterThan(600);
     expect(len).toBeLessThan(900);
+  });
+
+  it('caps the grass shoulder at 9 instead of the giant 6', () => {
+    const t = buildTrack(PARK_DEF);
+    expect(t.offTrackCap).toBe(9);
   });
 
   it('passes validateTrackDef', () => {
@@ -93,10 +98,49 @@ describe('neon def', () => {
   });
 });
 
+describe('forest def', () => {
+  it('showcases open boundaries with the giant 6 m/s cap', () => {
+    expect(FOREST_DEF.id).toBe('forest');
+    expect(FOREST_DEF.halfWidth).toBe(5);
+    expect(FOREST_DEF.boundary).toBe('open');
+    expect(FOREST_DEF.offTrackCap).toBe(6);
+    const len = sampleTrack(FOREST_DEF).length;
+    expect(len).toBeGreaterThan(700);
+    expect(len).toBeLessThan(850);
+  });
+
+  it('passes validateTrackDef', () => {
+    expect(validateTrackDef(FOREST_DEF)).toEqual([]);
+  });
+
+  it('starts on a straight, closes, and derives 8 checkpoints', () => {
+    expect(FOREST_DEF.path[0].kind).toBe('straight');
+    const t = buildTrack(FOREST_DEF);
+    expect(t.samples.length).toBeGreaterThan(200);
+    expect(t.checkpoints).toHaveLength(8);
+    const tail = t.samples[t.samples.length - 1];
+    expect(Math.hypot(tail.x, tail.z)).toBeLessThan(4);
+    expect(t.start.heading).toBe(0);
+  });
+
+  it('never clamps: deep woods are drivable at the capped pace', () => {
+    const t = buildTrack(FOREST_DEF);
+    const s = createKartState(60, 50, 0);
+    s.speed = 20;
+    expect(resolveBoundary(s, t)).toBe(false);
+    expect(s.pos.x).toBe(60);
+  });
+
+  it('keeps edges readable against the dirt road', () => {
+    expect(FOREST_DEF.theme.asphalt).not.toBe(FOREST_DEF.theme.edge);
+    expect(FOREST_DEF.theme.edge).not.toBe(FOREST_DEF.theme.ground);
+  });
+});
+
 describe('TRACKS', () => {
-  it('lists all four tracks with unique, stable ids', () => {
-    expect(TRACKS.map((t) => t.id)).toEqual(['oval', 'circuit', 'park', 'neon']);
-    expect(new Set(TRACKS.map((t) => t.id)).size).toBe(4);
+  it('lists all five tracks with unique, stable ids', () => {
+    expect(TRACKS.map((t) => t.id)).toEqual(['oval', 'circuit', 'park', 'neon', 'forest']);
+    expect(new Set(TRACKS.map((t) => t.id)).size).toBe(5);
   });
 
   it('includes the oval as-built', () => {

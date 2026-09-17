@@ -71,15 +71,17 @@ export const CIRCUIT_DEF: TrackDef = {
   ],
 };
 
-// Track 3 — off-road park. Narrow asphalt, grass shoulders (soft), gentle
-// 45° S-kinks (opposite-signed pair, net heading π per half) = ~678 m.
-// Start/finish mid-straight (0, 0) facing +z.
+// Track 3 — off-road park. Narrow asphalt with a grass shoulder (soft):
+// leaving the road caps speed to 9 m/s on the grass, outer wall at
+// halfWidth + shoulder. Gentle 45° S-kinks (opposite-signed pair, net
+// heading π per half) = ~678 m. Start/finish mid-straight (0, 0) facing +z.
 export const PARK_DEF: TrackDef = {
   id: 'park',
   name: 'Off-road Park',
   halfWidth: 4.5,
   boundary: 'soft',
   shoulder: 9,
+  offTrackCap: 9,
   theme: {
     sky: 0x1c2b20,
     asphalt: 0x4f5747,
@@ -147,4 +149,43 @@ export const NEON_DEF: TrackDef = {
   ],
 };
 
-export const TRACKS: readonly TrackDef[] = [OVAL_DEF, CIRCUIT_DEF, PARK_DEF, NEON_DEF];
+// Track 5 — forest. Showcases the `open` boundary: no barriers anywhere,
+// leaving the dirt road caps speed to 6 m/s deep in the woods. Flowing
+// r35 sweepers + a gentle S-kink per half, point-symmetric (net heading π
+// each) = ~758 m. Start/finish mid-straight (0, 0) facing +z.
+export const FOREST_DEF: TrackDef = {
+  id: 'forest',
+  name: 'Forest',
+  halfWidth: 5,
+  boundary: 'open',
+  shoulder: 0,
+  offTrackCap: 6,
+  theme: {
+    sky: 0x0e1a14,
+    asphalt: 0x4b4640,
+    edge: 0xe8ff5e,
+    shoulder: 0x1e4028,
+    ground: 0x14301c,
+    barrier: 0x5a4632,
+  },
+  path: [
+    { kind: 'straight', length: 120 },
+    { kind: 'arc', radius: 35, angle: Math.PI / 2 },
+    { kind: 'straight', length: 40 },
+    { kind: 'arc', radius: 25, angle: Math.PI / 4 },
+    { kind: 'straight', length: 30 },
+    { kind: 'arc', radius: 25, angle: -Math.PI / 4 },
+    { kind: 'straight', length: 40 },
+    { kind: 'arc', radius: 35, angle: Math.PI / 2 },
+    { kind: 'straight', length: 120 },
+    { kind: 'arc', radius: 35, angle: Math.PI / 2 },
+    { kind: 'straight', length: 40 },
+    { kind: 'arc', radius: 25, angle: Math.PI / 4 },
+    { kind: 'straight', length: 30 },
+    { kind: 'arc', radius: 25, angle: -Math.PI / 4 },
+    { kind: 'straight', length: 40 },
+    { kind: 'arc', radius: 35, angle: Math.PI / 2 },
+  ],
+};
+
+export const TRACKS: readonly TrackDef[] = [OVAL_DEF, CIRCUIT_DEF, PARK_DEF, NEON_DEF, FOREST_DEF];

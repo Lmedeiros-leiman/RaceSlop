@@ -17,6 +17,12 @@
     id="raceslop-overlay"
     style="position: absolute; inset: 0; display: flex; pointer-events: none;"
   ></div>
+  <canvas
+    id="raceslop-minimap"
+    width="140"
+    height="140"
+    style="position: absolute; top: 8px; right: 8px; background: rgba(8,8,12,0.65); border-radius: 8px;"
+  ></canvas>
 </div>
 
 <script>
@@ -25,7 +31,8 @@
   const canvas = document.getElementById('raceslop-canvas');
   const hud = document.getElementById('raceslop-hud');
   const overlay = document.getElementById('raceslop-overlay');
-  if (canvas instanceof HTMLCanvasElement && hud instanceof HTMLElement && overlay instanceof HTMLElement) {
-    initGame(canvas, hud, overlay);
+  const minimap = document.getElementById('raceslop-minimap');
+  if (canvas instanceof HTMLCanvasElement && hud instanceof HTMLElement && overlay instanceof HTMLElement && minimap instanceof HTMLCanvasElement) {
+    initGame(canvas, hud, overlay, minimap);
   }
 </script>

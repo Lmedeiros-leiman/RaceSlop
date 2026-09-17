@@ -5,6 +5,7 @@ import { flowKey, initialFlow, renderOverlay, type FlowState } from './flow';
 import { updateHud } from './hud';
 import { attachKeyboard, consumeActions } from './input';
 import { cancelDrift, stepKart } from './kart';
+import { drawMinimap, MINIMAP_SIZE } from './minimap';
 import { createBrowserRecordStore } from './records';
 import { buildTrack, isOffTrack, LapTracker, resolveBoundary, type Track } from './track';
 import { buildTrackMesh, disposeGroup } from './trackMesh';
@@ -22,7 +23,7 @@ interface Race {
 // Full M2 game entry: character select -> track select -> race (M1 loop),
 // with best-lap persistence. Runs only in the browser (imported from a
 // client-side module script in GameCanvas.astro, never on the server).
-export function initGame(canvas: HTMLCanvasElement, hud: HTMLElement, overlay: HTMLElement): void {
+export function initGame(canvas: HTMLCanvasElement, hud: HTMLElement, overlay: HTMLElement, minimap: HTMLCanvasElement): void {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(canvas.clientWidth || 960, canvas.clientHeight || 540, false);
@@ -43,6 +44,8 @@ export function initGame(canvas: HTMLCanvasElement, hud: HTMLElement, overlay: H
 
   const raw = createRawInput();
   attachKeyboard(raw);
+
+  const mctx = minimap.getContext('2d');
 
   let flow: FlowState = initialFlow();
   let race: Race | null = null;
@@ -82,6 +85,7 @@ export function initGame(canvas: HTMLCanvasElement, hud: HTMLElement, overlay: H
       race = null;
     }
     hud.textContent = '';
+    mctx?.clearRect(0, 0, MINIMAP_SIZE, MINIMAP_SIZE);
   };
 
   const handlePick = (screen: 'character' | 'track', index: number): void => {
@@ -157,7 +161,7 @@ export function initGame(canvas: HTMLCanvasElement, hud: HTMLElement, overlay: H
         // drift charge (no charging a boost off-track). Unreachable behind
         // the wall clamp on wall tracks.
         if (isOffTrack(r.kart.pos, r.track)) {
-          if (r.kart.speed > DEFAULT_PARAMS.offTrackCap) r.kart.speed = DEFAULT_PARAMS.offTrackCap;
+          if (r.kart.speed > r.track.offTrackCap) r.kart.speed = r.track.offTrackCap;
           cancelDrift(r.kart);
         }
         const lap = r.tracker.update(r.kart.pos, now);
@@ -166,6 +170,7 @@ export function initGame(canvas: HTMLCanvasElement, hud: HTMLElement, overlay: H
         r.kartMesh.position.set(r.kart.pos.x, 0, r.kart.pos.z);
         r.kartMesh.rotation.y = r.kart.heading + r.kart.driftAngle;
         applyChaseCamera(camera, computeChasePose(r.kart.pos, r.kart.heading));
+        if (mctx) drawMinimap(mctx, r.track, r.kart.pos);
         updateHud(hud, {
           current: r.tracker.current,
           last: r.tracker.last,
