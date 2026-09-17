@@ -7,7 +7,7 @@ import { attachKeyboard, consumeActions } from './input';
 import { cancelDrift, stepKart } from './kart';
 import { drawMinimap, MINIMAP_SIZE } from './minimap';
 import { createBrowserRecordStore } from './records';
-import { buildTrack, isOffTrack, LapTracker, resolveBoundary, type Track } from './track';
+import { buildTrack, applyOffTrackDrag, isOffTrack, LapTracker, resolveBoundary, type Track } from './track';
 import { buildTrackMesh, disposeGroup } from './trackMesh';
 import { TRACKS } from './tracks';
 import { createKartState, createRawInput, DEFAULT_PARAMS, toDriveInput, type KartState } from './types';
@@ -161,7 +161,7 @@ export function initGame(canvas: HTMLCanvasElement, hud: HTMLElement, overlay: H
         // drift charge (no charging a boost off-track). Unreachable behind
         // the wall clamp on wall tracks.
         if (isOffTrack(r.kart.pos, r.track)) {
-          if (r.kart.speed > r.track.offTrackCap) r.kart.speed = r.track.offTrackCap;
+          applyOffTrackDrag(r.kart, r.track.offTrackCap, dt);
           cancelDrift(r.kart);
         }
         const lap = r.tracker.update(r.kart.pos, now);

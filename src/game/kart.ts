@@ -31,10 +31,14 @@ export function stepKart(s: KartState, input: DriveInput, p: KartParams, dt: num
     if (!s.drifting) {
       s.drifting = true;
       s.driftTime = 0;
+      // Small lateral kick toward the outside of the corner; heading kept.
+      const side = -Math.sign(input.steer);
+      s.pos.x += -Math.cos(s.heading) * side * 0.35;
+      s.pos.z += Math.sin(s.heading) * side * 0.35;
     }
     s.driftTime += dt;
     const target = p.driftMaxAngle * Math.sign(input.steer);
-    s.driftAngle += (target - s.driftAngle) * Math.min(1, 10 * dt);
+    s.driftAngle += (target - s.driftAngle) * Math.min(1, 6 * dt);
   } else if (s.drifting) {
     if (canDrift) {
       if (s.driftTime > 1.5) {
@@ -45,7 +49,14 @@ export function stepKart(s: KartState, input: DriveInput, p: KartParams, dt: num
         s.boostTime = p.boostSmallTime;
       }
     }
-    cancelDrift(s);
+    // Voluntary release: keep the angle and let it decay below, so the
+    // trajectory and the mesh ease back instead of snapping to zero.
+    s.drifting = false;
+    s.driftTime = 0;
+  }
+  if (!s.drifting && s.driftAngle !== 0) {
+    s.driftAngle += (0 - s.driftAngle) * Math.min(1, 7 * dt);
+    if (Math.abs(s.driftAngle) < 0.002) s.driftAngle = 0;
   }
 
   const dir = s.speed >= 0 ? 1 : -1;

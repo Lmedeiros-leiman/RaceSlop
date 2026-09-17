@@ -62,6 +62,30 @@ describe('drift and boost', () => {
     expect(s.driftAngle).toBeCloseTo(DEFAULT_PARAMS.driftMaxAngle, 1);
   });
 
+  it('kicks laterally toward the outside on drift initiate', () => {
+    const s = createKartState(0, 0, 0);
+    s.speed = DEFAULT_PARAMS.topSpeed;
+    stepKart(s, { throttle: true, brake: false, steer: 1, drift: true }, DEFAULT_PARAMS, 1 / 60);
+    expect(s.drifting).toBe(true);
+    // Right turn from +z: outside is +x. Must read as a shove, not a mode flip.
+    expect(s.pos.x).toBeGreaterThan(0.2);
+  });
+
+  it('eases the drift angle back on release instead of snapping', () => {
+    const s = createKartState(0, 0, 0);
+    s.speed = DEFAULT_PARAMS.topSpeed;
+    for (let i = 0; i < 120; i++) {
+      stepKart(s, { throttle: true, brake: false, steer: 1, drift: true }, DEFAULT_PARAMS, 1 / 60);
+    }
+    stepKart(s, { throttle: true, brake: false, steer: 1, drift: false }, DEFAULT_PARAMS, 1 / 60);
+    expect(s.drifting).toBe(false);
+    expect(s.driftAngle).toBeGreaterThan(0.2);
+    for (let i = 0; i < 120; i++) {
+      stepKart(s, { ...idle, throttle: true }, DEFAULT_PARAMS, 1 / 60);
+    }
+    expect(s.driftAngle).toBe(0);
+  });
+
   it('grants full boost after a long drift', () => {
     const s = createKartState(0, 0, 0);
     s.speed = DEFAULT_PARAMS.topSpeed;
