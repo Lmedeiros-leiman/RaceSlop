@@ -16,7 +16,7 @@ physics parameters, and lap rules do not change.
 In:
 
 - Data-driven track system (layouts defined as segment lists, not code)
-- 3 new tracks (technical circuit, off-road park, neon night) + oval retained
+- 4 new tracks (technical circuit, off-road park, neon night, forest) + oval retained
 - 4 character reskins (distinct look, identical handling)
 - Character select → track select → race flow as a DOM overlay in `/play`
 - Best-lap persistence per track in `localStorage`
@@ -64,8 +64,8 @@ Rules:
   spacing and lap-length checks measure from that length.
 - **Closure:** a def is valid only if the path returns to its start point
   (< 2 m gap) **and** its end heading returns to the start heading
-  (< ~5° gap), both enforced by tests. All four defs use point symmetry
-  (identical half-lists, net heading π each) so closure is guaranteed.
+   (< ~5° gap), both enforced by tests. All five defs use point symmetry
+   (identical half-lists, net heading π each) so closure is guaranteed.
 - **Validation:** a `validateTrackDef(def)` helper + unit tests enforce:
   closure (position + heading), min corner radius ≥ 18 m on the center-line,
   start/finish on a straight, no self-intersection (approx segment check),
@@ -76,12 +76,19 @@ Rules:
   Exception: `oval` keeps its M1 as-built radii (10/12) unchanged.
 - **Boundary policy:**
   - `wall` (M1 behavior): invisible wall at the asphalt edge — clamp
-    position, cancel drift charge, ×0.7 speed bleed per contact.
+    position, cancel drift charge, keep the tangential velocity (slide
+    along the wall with ~8% loss; head-on stops). Playtest fix: the old
+    per-frame ×0.7 melt pinned the kart, so it now kills only the outward
+    component. Karts keep partial steer authority at standstill to turn
+    away from a head-on pin.
   - `soft`: no clamp on a `shoulder`-wide slowdown surface (grass) in
-    `dist ∈ (halfWidth, halfWidth + shoulder]`; the speed cap (`offTrackCap`)
-    applies there as a hard clamp; grass cancels drift charge / denies boost
-    on release (no charging a boost off-track). An outer wall at
-    `halfWidth + shoulder` clamps escapes with wall behavior.
+    `dist ∈ (halfWidth, halfWidth + shoulder]`; the track's `offTrackCap`
+    is eased toward exponentially (no hard clamp); grass cancels drift
+    charge / denies boost on release (no charging a boost off-track).
+    An outer wall at `halfWidth + shoulder` clamps escapes with wall behavior.
+  - `open` (forest): no barriers anywhere — `resolveBoundary` never
+    clamps. Leaving the road eases toward a harsh per-track `offTrackCap`
+    (forest: 6 m/s) with drift cancel, same as soft grass.
   - The M1 `halfWidth + 2` tolerance in `isOffTrack` is removed; generic
     tracks use the exact `halfWidth` / `halfWidth + shoulder` bands above.
 - **Theme:** `TrackTheme` is `{ sky, asphalt, edge, shoulder, ground, barrier }`
@@ -90,18 +97,19 @@ Rules:
   asphalt and ground at race speed. The start stripe orients to the
   start-tangent (not hardcoded +x).
 
-## 5. The four tracks
+## 5. The five tracks
 
 Lap-pace math: realistic race pace is 18–22 m/s average (top speed 28, drift
 bleed, corners). Vision's 45–90 s band assumes the slow end; T4 lands inside
-it, T2/T3 land shorter. Final numbers are tuning, not redesign.
+it, T2/T3/T5 land shorter. Final numbers are tuning, not redesign.
 
 | # | id | Name | halfWidth | Boundary | Min radius | Lap length | Character |
 |---|---|---|---|---|---|---|---|
 | 1 | `oval` | Oval Tutorial | 6 m | wall | 40 m | ~411 m (~20 s) | M1 as-built, unchanged |
 | 2 | `circuit` | Technical Circuit | 6 m | wall | 20 m | 650–750 m (~35–40 s) | S-curve chicanes, tight entries reward clean lines |
-| 3 | `park` | Off-road Park | 4.5 m | soft (shoulder 9 m) | 18 m | 600–900 m (~35–45 s) | Narrow asphalt, grass shoulders punish wide lines |
+| 3 | `park` | Off-road Park | 4.5 m | soft (shoulder 9 m, grass cap 9 m/s) | 18 m | 600–900 m (~35–45 s) | Narrow asphalt, grass shoulders punish wide lines |
 | 4 | `neon` | Neon Night | 7 m | wall | 40 m | 1000–1250 m (~50–65 s) | Wide flowing sweepers, dark theme readability test |
+| 5 | `forest` | Forest | 5 m | open (no barriers, 6 m/s cap) | 25 m | ~758 m (~35–40 s) | Dirt road in dark woods, showcases the open model |
 
 Design constraints for all new tracks: min corner radius ≥ 18 m (readable at
 speed, cornerable without drift at ~20 m/s), 1–2 drift moments per lap,
@@ -179,10 +187,12 @@ set (`GAME_CODES`).
 
 New files (existing M1 modules keep their roles):
 
-- `src/game/tracks.ts` — the four `TrackDef` data entries
+- `src/game/tracks.ts` — the five `TrackDef` data entries
 - `src/game/characters.ts` — `CharacterDef[]` + `buildKartMesh(def)`
   (shared cached geometries/materials per Vision §11 perf rule)
 - `src/game/records.ts` — pure record store + browser adapter
+- `src/game/minimap.ts` — top-down minimap (pure projection math +
+  thin canvas renderer, projection cached per track)
 - `src/game/flow.ts` — select-flow state machine + overlay rendering
   (may split rendering into `overlay.ts` if it grows)
 
@@ -190,19 +200,21 @@ Modified: `track.ts` (generic `buildTrack` + `sampleTrack` + `validateTrackDef`,
 boundary policies; `OVAL_DEF` parity with M1 `buildOval`), `trackMesh.ts`
 (theme-aware, tangent-oriented start stripe), `input.ts` (Escape, confirm rename),
 `main.ts` (flow wiring, per-race scene assembly with geometry disposal on track
-switch), `GameCanvas.astro` + `play.astro` (overlay element).
-`initGame(canvas, hud, overlay)` remains the only entry.
+switch), `GameCanvas.astro` + `play.astro` (overlay + minimap elements).
+`initGame(canvas, hud, overlay, minimap)` remains the only entry.
 
 ## 11. Acceptance (M2 done)
 
 - [ ] `/play` boots into character select; 4 characters visually distinct
-- [ ] Track select shows 4 tracks, each with its stored best or `--:--.--`
-- [ ] All 4 tracks drivable start-to-finish with correct lap counting;
+- [ ] Track select shows 5 tracks, each with its stored best or `--:--.--`
+- [ ] All 5 tracks drivable start-to-finish with correct lap counting;
       wrong-way laps never count on any track
-- [ ] All 4 defs pass `validateTrackDef` (closure position + heading,
+- [ ] All 5 defs pass `validateTrackDef` (closure position + heading,
       8 checkpoints, lengths within §5 ranges)
-- [ ] Park slows on grass shoulders; walls behave per policy on all tracks;
-      grass cancels drift charge (no off-track boost charging)
+- [ ] Park slows on grass shoulders; walls behave per policy on wall tracks;
+      forest has no barriers with the harsh 6 m/s cap; grass cancels drift
+      charge (no off-track boost charging)
+- [ ] Minimap shows the track loop plus the live kart dot on every track
 - [ ] Best lap per track survives reload; HUD best = all-time best
 - [ ] Records: corrupt/foreign payload discarded, quota/private-mode never
       throws (unit-tested with fake storage)
@@ -220,3 +232,8 @@ Exact segment lengths/radii within §5 ranges, drift-corner pacing, palette
 values, and overlay copy are tuned by playing, not by further spec. If a
 range blocks playability, adjust within §5 constraints and note the final
 value in the M2 close-out.
+
+Close-out values: park grass cap 9 m/s, forest cap 6 m/s (both eased via
+`applyOffTrackDrag`, 4/s); steering sign corrected (right = −heading);
+wall contact slides (tangent kept ×0.92); drift bite 6/s with 0.35 m
+outside kick, voluntary release decays at 7/s.
