@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildTrack, isOffTrack, LapTracker, minRadius, nearestOnCenter, pathLength, resolveBoundary, samplePath, validateTrackDef } from './track';
+import { applyOffTrackDrag, buildTrack, isOffTrack, LapTracker, minRadius, nearestOnCenter, pathLength, resolveBoundary, samplePath, validateTrackDef } from './track';
 import { DEFAULT_THEME, OVAL_DEF } from './tracks';
 import type { TrackDef } from './track';
 import { createKartState } from './types';
@@ -123,6 +123,30 @@ describe('buildTrack (oval def, M1 parity)', () => {
 
   it('reports the smallest arc radius', () => {
     expect(minRadius(OVAL_DEF.path)).toBe(40);
+  });
+});
+
+describe('applyOffTrackDrag', () => {
+  it('bleeds speed toward the cap over frames instead of hard-clamping', () => {
+    const s = createKartState(0, 0, 0);
+    s.speed = 28;
+    applyOffTrackDrag(s, 6, 1 / 60);
+    expect(s.speed).toBeLessThan(28);
+    expect(s.speed).toBeGreaterThan(6);
+  });
+
+  it('settles at the cap after sustained off-track time', () => {
+    const s = createKartState(0, 0, 0);
+    s.speed = 28;
+    for (let i = 0; i < 300; i++) applyOffTrackDrag(s, 6, 1 / 60);
+    expect(s.speed).toBe(6);
+  });
+
+  it('leaves speeds at or below the cap alone', () => {
+    const s = createKartState(0, 0, 0);
+    s.speed = 5;
+    applyOffTrackDrag(s, 6, 1 / 60);
+    expect(s.speed).toBe(5);
   });
 });
 

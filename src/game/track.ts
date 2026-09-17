@@ -171,6 +171,14 @@ export function isOffTrack(pos: Vec2, track: Track): boolean {
   return nearestOnCenter(pos, track.samples).dist > track.halfWidth;
 }
 
+// Slowdown surfaces ease toward the cap instead of hard-clamping: leaving
+// the road at speed reads as plowing into grass/woods, not hitting a wall.
+export function applyOffTrackDrag(s: KartState, cap: number, dt: number): void {
+  if (dt <= 0 || s.speed <= cap) return;
+  s.speed += (cap - s.speed) * Math.min(1, 4 * dt);
+  if (s.speed - cap < 0.05) s.speed = cap;
+}
+
 export function resolveBoundary(s: KartState, track: Track): boolean {
   if (track.boundary === 'open') return false;
   const near = nearestOnCenter(s.pos, track.samples);
