@@ -1,3 +1,61 @@
+export type Segment =
+  | { kind: 'straight'; length: number }
+  | { kind: 'arc'; radius: number; angle: number };
+
+export interface PathSample {
+  x: number;
+  z: number;
+  heading: number;
+  s: number;
+}
+
+export const SAMPLE_STEP = 1.5;
+
+export function pathLength(path: Segment[]): number {
+  let len = 0;
+  for (const seg of path) {
+    len += seg.kind === 'straight' ? seg.length : seg.radius * Math.abs(seg.angle);
+  }
+  return len;
+}
+
+// Exact integration: each sub-arc of turn dth and length ds advances by
+// (ds/dth) * (M(dth) - I) * f(heading), where M(dth) rotates the heading
+// vector forward (M(th) * (sin h, cos h) = (sin(h+th), cos(h+th))); each
+// straight sub-step advances along f(heading). Composition is exact, so
+// closed paths close to float precision.
+export function samplePath(path: Segment[], maxStep = SAMPLE_STEP): PathSample[] {
+  const out: PathSample[] = [{ x: 0, z: 0, heading: 0, s: 0 }];
+  let x = 0;
+  let z = 0;
+  let h = 0;
+  let s = 0;
+  for (const seg of path) {
+    const segLen = seg.kind === 'straight' ? seg.length : seg.radius * Math.abs(seg.angle);
+    const n = Math.max(1, Math.ceil(segLen / maxStep));
+    const ds = segLen / n;
+    for (let i = 0; i < n; i++) {
+      if (seg.kind === 'straight') {
+        x += Math.sin(h) * ds;
+        z += Math.cos(h) * ds;
+      } else {
+        const dth = seg.angle / n;
+        const k = ds / dth;
+        const c = Math.cos(dth);
+        const sn = Math.sin(dth);
+        const fx = Math.sin(h);
+        const fz = Math.cos(h);
+        x += k * (fx * sn + fz * (1 - c));
+        z += k * (fz * sn - fx * (1 - c));
+        h += dth;
+      }
+      s += ds;
+      out.push({ x, z, heading: h, s });
+    }
+  }
+  return out;
+}
+
 import { cancelDrift } from './kart';
 import type { KartState, Vec2 } from './types';
 
@@ -7,51 +65,93 @@ export interface Checkpoint {
   radius: number;
 }
 
-export interface OvalTrack {
-  samples: Vec2[];
-  halfWidth: number;
-  checkpoints: Checkpoint[];
-  start: { pos: Vec2; heading: number };
+export interface TrackTheme {
+  sky: number;
+  asphalt: number;
+  edge: number;
+  shoulder: number;
+  ground: number;
+  barrier: number;
 }
 
-const HALF_STRAIGHT = 40;
-const RADIUS = 40;
+export interface TrackDef {
+  id: string;
+  name: string;
+  halfWidth: number;
+  boundary: 'wall' | 'soft' | 'open';
+  shoulder: number;
+  theme: TrackTheme;
+  path: Segment[];
+  checkpoints?: Checkpoint[];
+  offTrackCap?: number;
+}
 
-export function buildOval(): OvalTrack {
-  const straightLen = 2 * HALF_STRAIGHT;
-  const total = 2 * straightLen + 2 * Math.PI * RADIUS;
-  const n = 256;
-  const samples: Vec2[] = [];
-  for (let i = 0; i < n; i++) {
-    const d0 = (i / n) * total;
-    let p: Vec2;
-    if (d0 < straightLen) {
-      p = { x: -HALF_STRAIGHT + d0, z: -RADIUS };
-    } else if (d0 - straightLen < Math.PI * RADIUS) {
-      const a = -Math.PI / 2 + (d0 - straightLen) / RADIUS;
-      p = { x: HALF_STRAIGHT + Math.cos(a) * RADIUS, z: Math.sin(a) * RADIUS };
-    } else if (d0 - straightLen - Math.PI * RADIUS < straightLen) {
-      const d = d0 - straightLen - Math.PI * RADIUS;
-      p = { x: HALF_STRAIGHT - d, z: RADIUS };
-    } else {
-      const d = d0 - straightLen - Math.PI * RADIUS - straightLen;
-      const a = Math.PI / 2 + d / RADIUS;
-      p = { x: -HALF_STRAIGHT + Math.cos(a) * RADIUS, z: Math.sin(a) * RADIUS };
+export interface Track {
+  id: string;
+  samples: Vec2[];
+  halfWidth: number;
+  shoulder: number;
+  boundary: 'wall' | 'soft' | 'open';
+  offTrackCap: number;
+  checkpoints: Checkpoint[];
+  start: { pos: Vec2; heading: number };
+  theme: TrackTheme;
+}
+
+export interface TrackWalk {
+  samples: PathSample[];
+  length: number;
+}
+
+export const CHECKPOINT_COUNT = 8;
+
+export function sampleTrack(def: TrackDef): TrackWalk {
+  return { samples: samplePath(def.path), length: pathLength(def.path) };
+}
+
+export function deriveCheckpoints(def: TrackDef, walked: PathSample[], length: number): Checkpoint[] {
+  const checkpoints: Checkpoint[] = [];
+  for (let k = 0; k < CHECKPOINT_COUNT; k++) {
+    const sk = (k / CHECKPOINT_COUNT) * length;
+    let idx = 0;
+    let bestErr = Number.POSITIVE_INFINITY;
+    for (let i = 0; i < walked.length; i++) {
+      const err = Math.abs(walked[i].s - sk);
+      if (err < bestErr) {
+        bestErr = err;
+        idx = i;
+      }
     }
-    samples.push(p);
+    checkpoints.push({ x: walked[idx].x, z: walked[idx].z, radius: def.halfWidth + 6 });
   }
-  const checkpoints: Checkpoint[] = [
-    { x: 0, z: -RADIUS, radius: 10 },
-    { x: HALF_STRAIGHT + RADIUS, z: 0, radius: 12 },
-    { x: 0, z: RADIUS, radius: 10 },
-    { x: -HALF_STRAIGHT - RADIUS, z: 0, radius: 12 },
-  ];
+  return checkpoints;
+}
+
+export function buildTrack(def: TrackDef): Track {
+  const { samples: walked, length } = sampleTrack(def);
+  const samples: Vec2[] = walked.map((p) => ({ x: p.x, z: p.z }));
+  // Closed loop: the walker ends on the start; drop the coincident sample.
+  const end = walked[walked.length - 1];
+  if (samples.length > 1 && Math.hypot(end.x, end.z) < 1) samples.pop();
   return {
+    id: def.id,
     samples,
-    halfWidth: 6,
-    checkpoints,
-    start: { pos: { x: 0, z: -RADIUS }, heading: Math.PI / 2 },
+    halfWidth: def.halfWidth,
+    shoulder: def.shoulder,
+    boundary: def.boundary,
+    offTrackCap: def.offTrackCap ?? 12,
+    checkpoints: def.checkpoints ?? deriveCheckpoints(def, walked, length),
+    start: { pos: { x: walked[0].x, z: walked[0].z }, heading: walked[0].heading },
+    theme: def.theme,
   };
+}
+
+export function minRadius(path: Segment[]): number {
+  let min = Number.POSITIVE_INFINITY;
+  for (const seg of path) {
+    if (seg.kind === 'arc' && seg.radius < min) min = seg.radius;
+  }
+  return min;
 }
 
 export function nearestOnCenter(pos: Vec2, samples: Vec2[]): { dist: number; x: number; z: number } {
@@ -67,20 +167,36 @@ export function nearestOnCenter(pos: Vec2, samples: Vec2[]): { dist: number; x: 
   return { dist: bestD, x: samples[best].x, z: samples[best].z };
 }
 
-export function isOffTrack(pos: Vec2, track: OvalTrack): boolean {
-  return nearestOnCenter(pos, track.samples).dist > track.halfWidth + 2;
+export function isOffTrack(pos: Vec2, track: Track): boolean {
+  return nearestOnCenter(pos, track.samples).dist > track.halfWidth;
 }
 
-export function resolveBoundary(s: KartState, track: OvalTrack): boolean {
+export function resolveBoundary(s: KartState, track: Track): boolean {
+  if (track.boundary === 'open') return false;
   const near = nearestOnCenter(s.pos, track.samples);
-  if (near.dist <= track.halfWidth) return false;
-  const over = near.dist - track.halfWidth;
+  const limit = track.boundary === 'soft' ? track.halfWidth + track.shoulder : track.halfWidth;
+  if (near.dist <= limit) return false;
+  const over = near.dist - limit;
   const nx = (s.pos.x - near.x) / near.dist;
   const nz = (s.pos.z - near.z) / near.dist;
-  s.pos.x -= nx * over;
-  s.pos.z -= nz * over;
+  // Clamp onto the wall plus a hair inside so a parallel slide does not
+  // re-trigger every frame.
+  s.pos.x -= nx * (over + 0.03);
+  s.pos.z -= nz * (over + 0.03);
+  // Slide along the wall: keep the tangential component, kill the outward
+  // one. Head-on stops, angled contact slides with minimal loss instead of
+  // the old per-frame x0.7 melt that pinned the kart.
+  const moveDir = s.heading + s.driftAngle;
   cancelDrift(s);
-  s.speed *= 0.7;
+  if (s.speed !== 0) {
+    const vx = Math.sin(moveDir) * s.speed;
+    const vz = Math.cos(moveDir) * s.speed;
+    const vOut = vx * nx + vz * nz;
+    if (vOut > 0) {
+      const tangent = Math.sqrt(Math.max(0, s.speed * s.speed - vOut * vOut));
+      s.speed = Math.sign(s.speed) * tangent * 0.92;
+    }
+  }
   return true;
 }
 
@@ -125,4 +241,55 @@ export class LapTracker {
     }
     return { lap: null };
   }
+}
+
+export function validateTrackDef(def: TrackDef): string[] {
+  const errors: string[] = [];
+  const { samples: walked, length } = sampleTrack(def);
+  const end = walked[walked.length - 1];
+
+  if (Math.hypot(end.x, end.z) >= 2) errors.push('closure: position gap >= 2 m');
+  const TAU = Math.PI * 2;
+  const wrapped = ((end.heading % TAU) + TAU) % TAU;
+  if (Math.min(wrapped, TAU - wrapped) > (5 * Math.PI) / 180) {
+    errors.push('closure: heading gap >= 5 deg');
+  }
+
+  for (const seg of def.path) {
+    if (seg.kind === 'arc' && seg.radius < 18) errors.push(`radius: arc r=${seg.radius} < 18 m`);
+  }
+  if (def.path[0]?.kind !== 'straight') errors.push('start: path must begin on a straight');
+
+  // Approx self-intersection: dense points, skip pairs that are cyclically
+  // adjacent (within `window` samples along the loop), require the ribbons
+  // (2 * halfWidth) plus margin to stay clear.
+  const pts: Vec2[] = walked.map((p) => ({ x: p.x, z: p.z }));
+  if (pts.length > 1 && Math.hypot(end.x, end.z) < 1) pts.pop();
+  const minClear = 2 * def.halfWidth + 2;
+  const window = Math.ceil((2 * def.halfWidth + 10) / SAMPLE_STEP);
+  outer: for (let i = 0; i < pts.length; i++) {
+    for (let j = i + 1; j < pts.length; j++) {
+      const cyclic = Math.min(j - i, i + pts.length - j);
+      if (cyclic <= window) continue;
+      if (Math.hypot(pts[i].x - pts[j].x, pts[i].z - pts[j].z) < minClear) {
+        errors.push(`self-intersection: samples ${i}/${j} closer than ${minClear} m`);
+        break outer;
+      }
+    }
+  }
+
+  // Non-adjacent checkpoints must not overlap trigger zones (no wrong-branch
+  // triggers on folded layouts).
+  const cps = def.checkpoints ?? deriveCheckpoints(def, walked, length);
+  for (let i = 0; i < cps.length; i++) {
+    for (let j = i + 2; j < cps.length; j++) {
+      if (i === 0 && j === cps.length - 1) continue; // cyclic neighbors
+      const d = Math.hypot(cps[i].x - cps[j].x, cps[i].z - cps[j].z);
+      if (d <= cps[i].radius + cps[j].radius) {
+        errors.push(`checkpoints ${i}/${j} trigger zones overlap`);
+      }
+    }
+  }
+
+  return errors;
 }

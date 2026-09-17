@@ -1,0 +1,155 @@
+import { describe, expect, it } from 'vitest';
+import { buildTrack, isOffTrack, resolveBoundary, sampleTrack, validateTrackDef } from './track';
+import { CIRCUIT_DEF, FOREST_DEF, NEON_DEF, OVAL_DEF, PARK_DEF, TRACKS } from './tracks';
+import { createKartState } from './types';
+
+describe('circuit def', () => {
+  it('matches the SPEC-M2 §5 targets', () => {
+    expect(CIRCUIT_DEF.id).toBe('circuit');
+    expect(CIRCUIT_DEF.halfWidth).toBe(6);
+    expect(CIRCUIT_DEF.boundary).toBe('wall');
+    const len = sampleTrack(CIRCUIT_DEF).length;
+    expect(len).toBeGreaterThan(650);
+    expect(len).toBeLessThan(750);
+  });
+
+  it('passes validateTrackDef', () => {
+    expect(validateTrackDef(CIRCUIT_DEF)).toEqual([]);
+  });
+
+  it('starts on a straight, closes, and derives 8 checkpoints', () => {
+    expect(CIRCUIT_DEF.path[0].kind).toBe('straight');
+    const t = buildTrack(CIRCUIT_DEF);
+    expect(t.samples.length).toBeGreaterThan(200);
+    expect(t.checkpoints).toHaveLength(8);
+    const tail = t.samples[t.samples.length - 1];
+    expect(Math.hypot(tail.x, tail.z)).toBeLessThan(4);
+    expect(t.start.heading).toBe(0);
+  });
+});
+
+describe('park def', () => {
+  it('matches the SPEC-M2 §5 targets', () => {
+    expect(PARK_DEF.id).toBe('park');
+    expect(PARK_DEF.halfWidth).toBe(4.5);
+    expect(PARK_DEF.boundary).toBe('soft');
+    expect(PARK_DEF.shoulder).toBe(9);
+    const len = sampleTrack(PARK_DEF).length;
+    expect(len).toBeGreaterThan(600);
+    expect(len).toBeLessThan(900);
+  });
+
+  it('caps the grass shoulder at 9 instead of the giant 6', () => {
+    const t = buildTrack(PARK_DEF);
+    expect(t.offTrackCap).toBe(9);
+  });
+
+  it('passes validateTrackDef', () => {
+    expect(validateTrackDef(PARK_DEF)).toEqual([]);
+  });
+
+  it('starts on a straight, closes, and derives 8 checkpoints', () => {
+    expect(PARK_DEF.path[0].kind).toBe('straight');
+    const t = buildTrack(PARK_DEF);
+    expect(t.samples.length).toBeGreaterThan(200);
+    expect(t.checkpoints).toHaveLength(8);
+    const tail = t.samples[t.samples.length - 1];
+    expect(Math.hypot(tail.x, tail.z)).toBeLessThan(4);
+    expect(t.start.heading).toBe(0);
+  });
+
+  it('uses the exact grass band beside the start straight', () => {
+    const t = buildTrack(PARK_DEF);
+    // Start straight runs x=0, z in [0, 100]; (8, 50) sits on the grass.
+    expect(isOffTrack({ x: 8, z: 50 }, t)).toBe(true);
+    const s = createKartState(8, 50, 0);
+    expect(resolveBoundary(s, t)).toBe(false);
+    expect(s.pos.x).toBe(8);
+  });
+});
+
+describe('neon def', () => {
+  it('matches the SPEC-M2 §5 targets', () => {
+    expect(NEON_DEF.id).toBe('neon');
+    expect(NEON_DEF.halfWidth).toBe(7);
+    expect(NEON_DEF.boundary).toBe('wall');
+    const len = sampleTrack(NEON_DEF).length;
+    expect(len).toBeGreaterThan(1000);
+    expect(len).toBeLessThan(1250);
+  });
+
+  it('passes validateTrackDef', () => {
+    expect(validateTrackDef(NEON_DEF)).toEqual([]);
+  });
+
+  it('starts on a straight, closes, and derives 8 checkpoints', () => {
+    expect(NEON_DEF.path[0].kind).toBe('straight');
+    const t = buildTrack(NEON_DEF);
+    expect(t.samples.length).toBeGreaterThan(200);
+    expect(t.checkpoints).toHaveLength(8);
+    const tail = t.samples[t.samples.length - 1];
+    expect(Math.hypot(tail.x, tail.z)).toBeLessThan(4);
+    expect(t.start.heading).toBe(0);
+  });
+
+  it('keeps edges readable against the dark asphalt', () => {
+    expect(NEON_DEF.theme.asphalt).not.toBe(NEON_DEF.theme.edge);
+    expect(NEON_DEF.theme.edge).not.toBe(NEON_DEF.theme.sky);
+  });
+});
+
+describe('forest def', () => {
+  it('showcases open boundaries with the giant 6 m/s cap', () => {
+    expect(FOREST_DEF.id).toBe('forest');
+    expect(FOREST_DEF.halfWidth).toBe(5);
+    expect(FOREST_DEF.boundary).toBe('open');
+    expect(FOREST_DEF.offTrackCap).toBe(6);
+    const len = sampleTrack(FOREST_DEF).length;
+    expect(len).toBeGreaterThan(700);
+    expect(len).toBeLessThan(850);
+  });
+
+  it('passes validateTrackDef', () => {
+    expect(validateTrackDef(FOREST_DEF)).toEqual([]);
+  });
+
+  it('starts on a straight, closes, and derives 8 checkpoints', () => {
+    expect(FOREST_DEF.path[0].kind).toBe('straight');
+    const t = buildTrack(FOREST_DEF);
+    expect(t.samples.length).toBeGreaterThan(200);
+    expect(t.checkpoints).toHaveLength(8);
+    const tail = t.samples[t.samples.length - 1];
+    expect(Math.hypot(tail.x, tail.z)).toBeLessThan(4);
+    expect(t.start.heading).toBe(0);
+  });
+
+  it('never clamps: deep woods are drivable at the capped pace', () => {
+    const t = buildTrack(FOREST_DEF);
+    const s = createKartState(60, 50, 0);
+    s.speed = 20;
+    expect(resolveBoundary(s, t)).toBe(false);
+    expect(s.pos.x).toBe(60);
+  });
+
+  it('keeps edges readable against the dirt road', () => {
+    expect(FOREST_DEF.theme.asphalt).not.toBe(FOREST_DEF.theme.edge);
+    expect(FOREST_DEF.theme.edge).not.toBe(FOREST_DEF.theme.ground);
+  });
+});
+
+describe('TRACKS', () => {
+  it('lists all five tracks with unique, stable ids', () => {
+    expect(TRACKS.map((t) => t.id)).toEqual(['oval', 'circuit', 'park', 'neon', 'forest']);
+    expect(new Set(TRACKS.map((t) => t.id)).size).toBe(5);
+  });
+
+  it('includes the oval as-built', () => {
+    expect(TRACKS[0]).toBe(OVAL_DEF);
+  });
+
+  it('every def validates', () => {
+    for (const def of TRACKS) {
+      expect(validateTrackDef(def)).toEqual([]);
+    }
+  });
+});

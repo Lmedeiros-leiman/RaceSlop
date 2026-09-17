@@ -2,10 +2,10 @@ import type { RawInput } from './types';
 
 const GAME_CODES = new Set([
   'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space',
-  'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyR', 'Enter', 'ShiftLeft', 'ShiftRight',
+  'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyR', 'Enter', 'Escape', 'ShiftLeft', 'ShiftRight',
 ]);
 
-export function setKey(s: RawInput, code: string, down: boolean): void {
+export function setKey(s: RawInput, code: string, down: boolean, repeat = false): void {
   switch (code) {
     case 'ArrowUp':
     case 'KeyW':
@@ -29,27 +29,31 @@ export function setKey(s: RawInput, code: string, down: boolean): void {
       s.drift = down;
       break;
     case 'KeyR':
-      if (down) s.reset = true;
+      if (down && !repeat) s.reset = true;
       break;
     case 'Enter':
-      if (down) s.restart = true;
+      if (down && !repeat) s.confirm = true;
+      break;
+    case 'Escape':
+      if (down && !repeat) s.escape = true;
       break;
     default:
       break;
   }
 }
 
-export function consumeActions(s: RawInput): { reset: boolean; restart: boolean } {
-  const out = { reset: s.reset, restart: s.restart };
+export function consumeActions(s: RawInput): { reset: boolean; confirm: boolean; escape: boolean } {
+  const out = { reset: s.reset, confirm: s.confirm, escape: s.escape };
   s.reset = false;
-  s.restart = false;
+  s.confirm = false;
+  s.escape = false;
   return out;
 }
 
 export function attachKeyboard(s: RawInput): () => void {
   const down = (e: KeyboardEvent): void => {
     if (GAME_CODES.has(e.code)) e.preventDefault();
-    setKey(s, e.code, true);
+    setKey(s, e.code, true, e.repeat);
   };
   const up = (e: KeyboardEvent): void => {
     setKey(s, e.code, false);

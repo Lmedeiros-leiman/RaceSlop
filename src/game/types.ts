@@ -67,7 +67,8 @@ export interface RawInput {
   right: boolean;
   drift: boolean;
   reset: boolean;
-  restart: boolean;
+  confirm: boolean;
+  escape: boolean;
 }
 
 export interface DriveInput {
@@ -78,7 +79,7 @@ export interface DriveInput {
 }
 
 export function createRawInput(): RawInput {
-  return { throttle: false, brake: false, left: false, right: false, drift: false, reset: false, restart: false };
+  return { throttle: false, brake: false, left: false, right: false, drift: false, reset: false, confirm: false, escape: false };
 }
 
 export function toDriveInput(r: RawInput): DriveInput {
