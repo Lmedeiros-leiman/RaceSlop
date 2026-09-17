@@ -29,18 +29,25 @@ describe('longitudinal', () => {
 });
 
 describe('steering', () => {
-  it('yaws right with positive steer while moving', () => {
+  it('yaws right (negative heading) with positive steer while moving', () => {
     const s = createKartState(0, 0, 0);
     s.speed = 20;
     stepKart(s, { ...idle, steer: 1 }, DEFAULT_PARAMS, 1);
+    expect(s.heading).toBeCloseTo(-DEFAULT_PARAMS.steerRate, 6);
+  });
+
+  it('yaws left with negative steer while moving', () => {
+    const s = createKartState(0, 0, 0);
+    s.speed = 20;
+    stepKart(s, { ...idle, steer: -1 }, DEFAULT_PARAMS, 1);
     expect(s.heading).toBeCloseTo(DEFAULT_PARAMS.steerRate, 6);
   });
 
-  it('parked kart does not yaw', () => {
+  it('keeps partial steer authority at standstill to escape walls', () => {
     const s = createKartState(0, 0, 0);
     s.speed = 0;
     stepKart(s, { ...idle, steer: 1 }, DEFAULT_PARAMS, 1);
-    expect(s.heading).toBe(0);
+    expect(s.heading).toBeCloseTo(-DEFAULT_PARAMS.steerRate * 0.4, 6);
   });
 });
 

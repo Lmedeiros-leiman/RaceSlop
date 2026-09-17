@@ -100,6 +100,27 @@ describe('buildTrack (oval def, M1 parity)', () => {
     expect(near.dist).toBeLessThanOrEqual(t.halfWidth + 0.01);
   });
 
+  it('slides along walls instead of melting speed (angled contact)', () => {
+    const t = buildTrack(OVAL_DEF);
+    const s = createKartState(10, 0, Math.PI / 4);
+    s.speed = 20;
+    expect(resolveBoundary(s, t)).toBe(true);
+    const near = nearestOnCenter(s.pos, t.samples);
+    expect(near.dist).toBeLessThanOrEqual(t.halfWidth + 0.1);
+    // Tangential kept: ~14 * 0.92, not the old 20 * 0.7 = 14 flat melt —
+    // must stay well above a grind-to-stop.
+    expect(s.speed).toBeGreaterThan(10);
+    expect(s.speed).toBeLessThan(20);
+  });
+
+  it('stops head-on into a wall but keeps steer authority to escape', () => {
+    const t = buildTrack(OVAL_DEF);
+    const s = createKartState(10, 0, Math.PI / 2);
+    s.speed = 20;
+    expect(resolveBoundary(s, t)).toBe(true);
+    expect(s.speed).toBeCloseTo(0, 1);
+  });
+
   it('reports the smallest arc radius', () => {
     expect(minRadius(OVAL_DEF.path)).toBe(40);
   });

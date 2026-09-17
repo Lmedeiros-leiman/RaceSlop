@@ -105,6 +105,8 @@ export function buildTrackMesh(track: Track): THREE.Group {
 
   // 5. Low barrier walls (height 0.6) at the outer edge: +/- halfWidth
   // on wall tracks, +/- (halfWidth + shoulder) on soft tracks.
+  // Open tracks have no barriers by design.
+  if (track.boundary !== 'open') {
   const wallH = 0.6;
   const wallPos = new Float32Array(n * 2 * 2 * 3);
   for (let i = 0; i < n; i++) {
@@ -129,6 +131,7 @@ export function buildTrackMesh(track: Track): THREE.Group {
   wallGeo.computeVertexNormals();
   const wallMat = new THREE.MeshStandardMaterial({ color: track.theme.barrier, flatShading: true, side: THREE.DoubleSide });
   group.add(new THREE.Mesh(wallGeo, wallMat));
+  }
 
   // 6. Soft tracks: grass shoulder ribbon spanning halfWidth ..
   // halfWidth + shoulder on both sides, one geometry, one material.

@@ -78,11 +78,12 @@ export interface TrackDef {
   id: string;
   name: string;
   halfWidth: number;
-  boundary: 'wall' | 'soft';
+  boundary: 'wall' | 'soft' | 'open';
   shoulder: number;
   theme: TrackTheme;
   path: Segment[];
   checkpoints?: Checkpoint[];
+  offTrackCap?: number;
 }
 
 export interface Track {
@@ -90,7 +91,8 @@ export interface Track {
   samples: Vec2[];
   halfWidth: number;
   shoulder: number;
-  boundary: 'wall' | 'soft';
+  boundary: 'wall' | 'soft' | 'open';
+  offTrackCap: number;
   checkpoints: Checkpoint[];
   start: { pos: Vec2; heading: number };
   theme: TrackTheme;
@@ -137,6 +139,7 @@ export function buildTrack(def: TrackDef): Track {
     halfWidth: def.halfWidth,
     shoulder: def.shoulder,
     boundary: def.boundary,
+    offTrackCap: def.offTrackCap ?? 12,
     checkpoints: def.checkpoints ?? deriveCheckpoints(def, walked, length),
     start: { pos: { x: walked[0].x, z: walked[0].z }, heading: walked[0].heading },
     theme: def.theme,
@@ -169,16 +172,31 @@ export function isOffTrack(pos: Vec2, track: Track): boolean {
 }
 
 export function resolveBoundary(s: KartState, track: Track): boolean {
+  if (track.boundary === 'open') return false;
   const near = nearestOnCenter(s.pos, track.samples);
   const limit = track.boundary === 'soft' ? track.halfWidth + track.shoulder : track.halfWidth;
   if (near.dist <= limit) return false;
   const over = near.dist - limit;
   const nx = (s.pos.x - near.x) / near.dist;
   const nz = (s.pos.z - near.z) / near.dist;
-  s.pos.x -= nx * over;
-  s.pos.z -= nz * over;
+  // Clamp onto the wall plus a hair inside so a parallel slide does not
+  // re-trigger every frame.
+  s.pos.x -= nx * (over + 0.03);
+  s.pos.z -= nz * (over + 0.03);
+  // Slide along the wall: keep the tangential component, kill the outward
+  // one. Head-on stops, angled contact slides with minimal loss instead of
+  // the old per-frame x0.7 melt that pinned the kart.
+  const moveDir = s.heading + s.driftAngle;
   cancelDrift(s);
-  s.speed *= 0.7;
+  if (s.speed !== 0) {
+    const vx = Math.sin(moveDir) * s.speed;
+    const vz = Math.cos(moveDir) * s.speed;
+    const vOut = vx * nx + vz * nz;
+    if (vOut > 0) {
+      const tangent = Math.sqrt(Math.max(0, s.speed * s.speed - vOut * vOut));
+      s.speed = Math.sign(s.speed) * tangent * 0.92;
+    }
+  }
   return true;
 }
 

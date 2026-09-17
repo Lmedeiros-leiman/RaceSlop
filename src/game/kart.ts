@@ -49,8 +49,11 @@ export function stepKart(s: KartState, input: DriveInput, p: KartParams, dt: num
   }
 
   const dir = s.speed >= 0 ? 1 : -1;
-  const lowSpeedScale = Math.min(1, Math.abs(s.speed) / 4);
-  s.heading += input.steer * p.steerRate * dir * dt * (s.drifting ? 0.8 : 1) * lowSpeedScale;
+  // Facing +z at heading 0, world +x is to the driver's left, so a
+  // positive (right) steer must decrease heading. Keep partial authority
+  // at standstill so a kart pinned head-on into a wall can still turn away.
+  const lowSpeedScale = 0.4 + 0.6 * Math.min(1, Math.abs(s.speed) / 4);
+  s.heading -= input.steer * p.steerRate * dir * dt * (s.drifting ? 0.8 : 1) * lowSpeedScale;
 
   const moveDir = s.heading + s.driftAngle;
   s.pos.x += Math.sin(moveDir) * s.speed * dt;
